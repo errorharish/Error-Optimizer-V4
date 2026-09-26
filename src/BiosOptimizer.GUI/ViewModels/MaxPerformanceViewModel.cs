@@ -238,6 +238,30 @@ namespace BiosOptimizer.GUI.ViewModels
         // ── Collections ───────────────────────────────────────────────
         public ObservableCollection<OptimizationCandidateItemModel> Candidates { get; } = new();
         public ObservableCollection<OptimizationActionItemModel> ActionHistory { get; } = new();
+        public ObservableCollection<PassProgressionDto> PassHistory { get; } = new();
+
+        // ── System Performance Tuning Metrics ─────────────────────────
+        private SystemTuningMetricsDto _systemTuning = new();
+        public SystemTuningMetricsDto SystemTuning
+        {
+            get => _systemTuning;
+            set
+            {
+                _systemTuning = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StandbyPurgedText));
+                OnPropertyChanged(nameof(MmcssStatusText));
+                OnPropertyChanged(nameof(Win32PriorityText));
+                OnPropertyChanged(nameof(NetworkThrottlingText));
+            }
+        }
+
+        public string StandbyPurgedText => _systemTuning.StandbyListPurgedMb > 0 
+            ? $"{_systemTuning.StandbyListPurgedMb:F0} MB Purged" 
+            : "Standby Cache Clean";
+        public string MmcssStatusText => _systemTuning.MmcssPriorityBoostEnabled ? "Active (Gaming/Audio Priority)" : "Standard";
+        public string Win32PriorityText => _systemTuning.Win32PrioritySeparationConfigured ? "0x26 (Short Variable High Quantum)" : "Default";
+        public string NetworkThrottlingText => _systemTuning.NetworkThrottlingIndexDisabled ? "Disabled (0xFFFFFFFF Zero Packet Throttling)" : "Standard";
 
         // ── Commands ──────────────────────────────────────────────────
         public ICommand ScanCommand { get; }
@@ -359,6 +383,20 @@ namespace BiosOptimizer.GUI.ViewModels
                         StopReason = result.StopReason;
                         LastBatchId = result.TransactionBatchId;
                         HasCompletedOptimization = true;
+
+                        if (result.SystemTuning != null)
+                        {
+                            SystemTuning = result.SystemTuning;
+                        }
+
+                        PassHistory.Clear();
+                        if (result.PassHistory != null)
+                        {
+                            foreach (var pass in result.PassHistory)
+                            {
+                                PassHistory.Add(pass);
+                            }
+                        }
 
                         ActionHistory.Clear();
                         foreach (var a in result.Actions)

@@ -147,6 +147,39 @@ namespace BiosOptimizer.IPC.Contracts
     /// <summary>
     /// Complete result of multi-pass maximum performance optimization.
     /// </summary>
+    /// <summary>
+    /// Step-by-step progression record for a single optimization pass.
+    /// </summary>
+    public class PassProgressionDto
+    {
+        public int PassNumber { get; set; }
+        public int StartProcessCount { get; set; }
+        public int EndProcessCount { get; set; }
+        public int ProcessesReduced => Math.Max(0, StartProcessCount - EndProcessCount);
+        public double RamFreedMb { get; set; }
+        public double CpuLoadChangePercent { get; set; }
+        public int ActionsAppliedCount { get; set; }
+        public string PassSummary { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Telemetry for coordinated OS system performance tuning.
+    /// </summary>
+    public class SystemTuningMetricsDto
+    {
+        public bool MmcssPriorityBoostEnabled { get; set; } = true;
+        public bool NetworkThrottlingIndexDisabled { get; set; } = true;
+        public bool HighPerformancePowerPlanActive { get; set; } = true;
+        public double StandbyListPurgedMb { get; set; }
+        public bool HagsConfigured { get; set; } = true;
+        public bool Win32PrioritySeparationConfigured { get; set; } = true;
+        public int SystemTuningActionsApplied { get; set; }
+    }
+
+    /// <summary>
+    /// Complete result of multi-pass maximum performance optimization.
+    /// </summary>
     public class OptimizationResultDto
     {
         public bool Success { get; set; }
@@ -166,6 +199,8 @@ namespace BiosOptimizer.IPC.Contracts
         public string StopReason { get; set; } = string.Empty;
         public string TransactionBatchId { get; set; } = string.Empty;
         public List<OptimizationActionDtoResult> Actions { get; set; } = new();
+        public List<PassProgressionDto> PassHistory { get; set; } = new();
+        public SystemTuningMetricsDto SystemTuning { get; set; } = new();
         public List<string> ActiveShields { get; set; } = new();
         public DateTime CompletedAt { get; set; } = DateTime.UtcNow;
     }

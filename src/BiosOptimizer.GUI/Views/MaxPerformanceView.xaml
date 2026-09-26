@@ -20,6 +20,9 @@
                 <!-- Actions Bar -->
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="18"/>
+                <!-- Multi-Pass Progression & System Tuning Banner -->
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="18"/>
                 <!-- Candidate / Result Tabs & Details -->
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
@@ -52,7 +55,7 @@
             </Grid>
 
             <!-- 2. Workload & Safety Shield Banner -->
-            <Border Grid.Row="2" Style="{StaticResource GlassCardStyle}" Padding="16,14" Background="{StaticResource GlassCardBackground}">
+            <Border Grid.Row="2" Style="{StaticResource GlassCardStyle}" Padding="16,14">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -165,8 +168,141 @@
                 </Grid>
             </Border>
 
-            <!-- 5. Optimization Candidates & Action History Section -->
+            <!-- 5. Multi-Pass Progression Timeline & System Performance Tuning Grid -->
             <Grid Grid.Row="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Pass Progression History Card -->
+                <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="Multi-Pass Convergence Progression" Style="{StaticResource CardTitleStyle}"/>
+                            <TextBlock Text="Dynamic multi-pass convergence timeline reaching safe minimum" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="2" MaxHeight="220" VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
+                            <ItemsControl ItemsSource="{Binding PassHistory}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.Column="0" Background="{StaticResource AccentBrush}" CornerRadius="4" Padding="6,3" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding PassNumber, StringFormat='PASS {0}'}" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                                </Border>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding StartProcessCount}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                        <TextBlock Text=" → " FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                                        <TextBlock Text="{Binding EndProcessCount}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource AccentBrush}"/>
+                                                        <TextBlock Text=" procs" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                                        <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
+                                                            <TextBlock Text="{Binding ProcessesReduced, StringFormat='-{0} reduced'}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding PassSummary}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+                                                </StackPanel>
+
+                                                <Border Grid.Column="2" Background="{StaticResource HoverBackgroundBrush}" CornerRadius="4" Padding="8,4" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding RamFreedMb, StringFormat={}{0:F0} MB freed}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- System Tuning & Latency Profile Card -->
+                <Border Grid.Column="2" Style="{StaticResource GlassCardStyle}" Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="System Performance &amp; Latency Tuning" Style="{StaticResource CardTitleStyle}"/>
+                            <TextBlock Text="OS kernel optimizations for maximum responsiveness and low jitter" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2">
+                            <!-- MMCSS & Win32 Priority -->
+                            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="MMCSS &amp; Quantum Scheduling" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding Win32PriorityText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding MmcssStatusText}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- Standby Memory Purge -->
+                            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Standby Memory Cache Purge" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Purged working set caches &amp; standby page list" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding StandbyPurgedText}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- Network Throttling Index -->
+                            <Border Margin="0,0,0,0" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Network Latency &amp; Gaming Packet Throttling" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding NetworkThrottlingText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
+                                        <TextBlock Text="0ms Delay" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 6. Optimization Candidates & Action History Section -->
+            <Grid Grid.Row="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="16"/>
@@ -191,7 +327,7 @@
                             <ItemsControl ItemsSource="{Binding Candidates}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource InputBackground}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
@@ -238,7 +374,7 @@
                             <ItemsControl ItemsSource="{Binding ActionHistory}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource InputBackground}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
@@ -248,7 +384,7 @@
                                                 <StackPanel Grid.Column="0">
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding TargetIdentifier}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
+                                                        <Border Background="{StaticResource HoverBackgroundBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
                                                             <TextBlock Text="{Binding ActionType}" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
                                                         </Border>
                                                     </StackPanel>
