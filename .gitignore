@@ -14,6 +14,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+*_wpftmp.*
 
 # Visual Studio / Rider / VSCode
 .vs/
