@@ -4,405 +4,552 @@
              xmlns:controls="clr-namespace:BiosOptimizer.GUI.Controls"
              Background="Transparent" UseLayoutRounding="True" SnapsToDevicePixels="True"
              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
-    
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
-        <Grid Margin="28,24,24,24">
-            <Grid.RowDefinitions>
+
+    <Grid Margin="28,20,28,24">
+        <!-- ======================================================== -->
+        <!-- 1. PRIMARY READY SCREEN                                  -->
+        <!-- ======================================================== -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}"
+                      Visibility="{Binding IsReadyMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel Margin="0,0,0,20">
                 <!-- Header -->
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="18"/>
-                <!-- Workload Shield Banner -->
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="18"/>
-                <!-- Metrics Cards -->
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="18"/>
-                <!-- Actions Bar -->
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="18"/>
-                <!-- Multi-Pass Progression & System Tuning Banner -->
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="18"/>
-                <!-- Candidate / Result Tabs & Details -->
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <!-- 1. Header Section -->
-            <Grid Grid.Row="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="V4 Maximum Performance" Style="{StaticResource PageTitleStyle}"/>
-                        <Border Background="{StaticResource AccentBrush}" CornerRadius="4" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="ADAPTIVE OPTIMIZER" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Text="Iterative background process reduction and gaming &amp; editing performance tuning. Adapts safely to your hardware drivers and active workloads."
-                               Style="{StaticResource PageSubtitleStyle}" Margin="0,4,0,0"/>
-                </StackPanel>
-
-                <!-- Status Pill -->
-                <Border Grid.Column="1" Style="{StaticResource GlassCardStyle}" Padding="14,8" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="8" Height="8" CornerRadius="4" Background="{StaticResource SuccessBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontWeight="SemiBold"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <!-- 2. Workload & Safety Shield Banner -->
-            <Border Grid.Row="2" Style="{StaticResource GlassCardStyle}" Padding="16,14">
-                <Grid>
+                <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="ERROR OPTIMIZER V4" Style="{StaticResource PageTitleStyle}"/>
+                            <Border Background="{StaticResource AccentBrush}" CornerRadius="4" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="MAXIMUM PERFORMANCE" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                            <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="Gaming + Editing" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Automated safe background reduction and gaming &amp; editing performance tuning. Adapts safely to your hardware drivers and active workloads."
+                                   Style="{StaticResource PageSubtitleStyle}" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Status Pill -->
+                    <Border Grid.Column="1" Style="{StaticResource GlassCardStyle}" Padding="14,8" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="8" Height="8" CornerRadius="4" Background="{StaticResource SuccessBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Active Protection Shield Banner -->
+                <Border Style="{StaticResource GlassCardStyle}" Padding="16,14" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Width="38" Height="38" CornerRadius="8" Background="{StaticResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                            <TextBlock Text="🛡️" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding WorkloadDescription}" FontWeight="Bold" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Windows Protection: Protected • Gaming Protection: Protected • Editing Protection: Protected"
+                                       FontSize="11" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Beginner KPI Cards (Current Background Processes, CPU Load, RAM Usage) -->
+                <Grid Margin="0,0,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="14"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8" Background="{StaticResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
-                        <TextBlock Text="🛡️" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <!-- Card 1: Current Background Processes -->
+                    <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="18,16">
+                        <StackPanel>
+                            <TextBlock Text="CURRENT BACKGROUND PROCESSES" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="{Binding CurrentProcessCount}" FontSize="32" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text=" active" FontSize="13" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding SafeMinimumRangeText, StringFormat='Hardware-aware safe floor: {0} procs'}"
+                                       FontSize="11" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                        </StackPanel>
                     </Border>
 
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding WorkloadDescription}" FontWeight="Bold" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <TextBlock Text="System protection policy actively preserves Windows kernel, security, audio DACs, anti-cheat, hardware drivers, and editing render sessions."
-                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
-                    </StackPanel>
+                    <!-- Card 2: Current CPU Background Load -->
+                    <Border Grid.Column="2" Style="{StaticResource GlassCardStyle}" Padding="18,16">
+                        <StackPanel>
+                            <TextBlock Text="CURRENT CPU BACKGROUND LOAD" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="{Binding FormattedCpuLoad}" FontSize="32" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text=" load" FontSize="13" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock Text="Active background thread overhead" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Card 3: Current RAM Background Usage -->
+                    <Border Grid.Column="4" Style="{StaticResource GlassCardStyle}" Padding="18,16">
+                        <StackPanel>
+                            <TextBlock Text="CURRENT RAM BACKGROUND USAGE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="{Binding FormattedRamUsage}" FontSize="32" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text=" used" FontSize="13" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock Text="System working set and background cache" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
                 </Grid>
-            </Border>
 
-            <!-- 3. Metrics Cards Grid -->
-            <Grid Grid.Row="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+                <!-- Action Bar: MAXIMUM OPTIMIZE, SCAN, VIEW DETAILS, RESTORE -->
+                <Border Style="{StaticResource GlassCardStyle}" Padding="18,16" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                <!-- Initial vs Current Processes Card -->
-                <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="PROCESS COUNT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding CurrentProcessCount}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text=" active" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Adaptive Dynamic Optimization" FontWeight="Bold" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Iteratively eliminates non-essential background workload down to the safe minimum."
+                                       FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <TextBlock Text="{Binding FormattedRamRecovered}" FontSize="11" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                    </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ScanCommand}" Padding="14,10" Margin="0,0,10,0">
+                                <TextBlock Text="SCAN" FontSize="12" FontWeight="SemiBold"/>
+                            </Button>
+
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ToggleDetailsCommand}" Padding="14,10" Margin="0,0,10,0">
+                                <TextBlock Text="VIEW DETAILS" FontSize="12" FontWeight="SemiBold"/>
+                            </Button>
+
+                            <Button Style="{StaticResource PrimaryButtonStyle}" Command="{Binding MaximumOptimizeCommand}" Padding="22,10">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚡" Margin="0,0,8,0" FontSize="13"/>
+                                    <TextBlock Text="MAXIMUM OPTIMIZE" FontSize="13" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
-                <!-- Adaptive Target Range Card -->
-                <Border Grid.Column="2" Style="{StaticResource GlassCardStyle}" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="SAFE TARGET RANGE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding SafeMinimumRangeText}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                            <TextBlock Text=" procs" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                <!-- Rollback Notice & Restore Button (Available only when transaction exists) -->
+                <Border Style="{StaticResource GlassCardStyle}" Padding="16,12" Margin="0,0,0,0"
+                        Visibility="{Binding HasRollbackAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Previous Optimization State Available" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="This restores the system changes made by V4." FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <TextBlock Text="Hardware-aware safe floor" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
-                    </StackPanel>
+
+                        <Button Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RollbackCommand}" Padding="14,8">
+                            <TextBlock Text="RESTORE PREVIOUS STATE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"/>
+                        </Button>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ======================================================== -->
+        <!-- 2. SAFETY CONFIRMATION SCREEN (PRE-OPTIMIZATION)        -->
+        <!-- ======================================================== -->
+        <Border Style="{StaticResource GlassCardStyle}" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="620"
+                Visibility="{Binding IsConfirmSafetyMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <Border Width="48" Height="48" CornerRadius="10" Background="{StaticResource AccentSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,14">
+                    <TextBlock Text="🛡️" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
 
-                <!-- Reducible Candidates Card -->
-                <Border Grid.Column="4" Style="{StaticResource GlassCardStyle}" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="REDUCIBLE BACKGROUND" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding ReducibleProcessCount}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text=" items" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                <TextBlock Text="Safety Confirmation" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                <TextBlock Text="V4 will optimize Windows for Gaming + Editing and make reversible system changes."
+                           FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,20"/>
+
+                <!-- 3 Safety Verification Cards -->
+                <Border Margin="0,0,0,8" Padding="14,10" CornerRadius="8" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Backup" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Automated system and registry state snapshot" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                         </StackPanel>
-                        <TextBlock Text="Telemetry, updaters &amp; idle tasks" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
-                    </StackPanel>
+                        <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BackupStatusText}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                        </Border>
+                    </Grid>
                 </Border>
 
-                <!-- Protected Subsystems Card -->
-                <Border Grid.Column="6" Style="{StaticResource GlassCardStyle}" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="PROTECTED SUBSYSTEMS" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding ProtectedProcessCount}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                            <TextBlock Text=" shielded" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                <Border Margin="0,0,0,8" Padding="14,10" CornerRadius="8" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Rollback" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="One-click full restoration of all applied modifications" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                         </StackPanel>
-                        <TextBlock Text="OS, Drivers &amp; Workloads" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
-                    </StackPanel>
+                        <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding RollbackStatusText}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                        </Border>
+                    </Grid>
                 </Border>
-            </Grid>
 
-            <!-- 4. Interactive Command Bar -->
-            <Border Grid.Row="6" Style="{StaticResource GlassCardStyle}" Padding="16,12">
+                <Border Margin="0,0,0,24" Padding="14,10" CornerRadius="8" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Protected components" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Windows kernel, security, drivers, anti-cheat &amp; creative apps shielded" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ProtectedComponentsStatusText}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Actions -->
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding CancelSafetyCommand}" Padding="0,12">
+                        <TextBlock Text="CANCEL" FontSize="12" FontWeight="SemiBold"/>
+                    </Button>
+
+                    <Button Grid.Column="2" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding StartOptimizationCommand}" Padding="0,12">
+                        <TextBlock Text="START OPTIMIZATION" FontSize="12" FontWeight="Bold"/>
+                    </Button>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ======================================================== -->
+        <!-- 3. OPTIMIZING PROGRESS SCREEN                            -->
+        <!-- ======================================================== -->
+        <Border Style="{StaticResource GlassCardStyle}" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="620"
+                Visibility="{Binding IsOptimizingMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <Border Width="48" Height="48" CornerRadius="10" Background="{StaticResource AccentSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,14">
+                    <TextBlock Text="⚡" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <TextBlock Text="Optimizing Maximum Performance" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                
+                <!-- Plain-Language Progress Message -->
+                <Border Background="{StaticResource BgBaseBrush}" CornerRadius="6" Padding="14,10" Margin="0,14,0,20">
+                    <TextBlock Text="{Binding PlainLanguageProgress}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
+                </Border>
+
+                <TextBlock Text="DYNAMIC MULTI-PASS CONVERGENCE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+                <!-- Dynamic Step Progression with Down Arrows (↓) -->
+                <Border Background="{StaticResource BgBaseBrush}" CornerRadius="8" Padding="18,14" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" MaxHeight="240">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
+                        <ItemsControl ItemsSource="{Binding ProgressionSteps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel HorizontalAlignment="Center" Margin="0,2">
+                                        <TextBlock Text="{Binding ProcessCountText}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="↓" FontSize="16" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,2"
+                                                   Visibility="{Binding ShowArrow, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- ======================================================== -->
+        <!-- 4. RESULT SCREEN (BEGINNER-FRIENDLY FINAL SUMMARY)       -->
+        <!-- ======================================================== -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}"
+                      Visibility="{Binding IsCompletedMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Style="{StaticResource GlassCardStyle}" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="720">
+                <StackPanel>
+                    <Border Width="48" Height="48" CornerRadius="10" Background="{StaticResource SuccessSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,14">
+                        <TextBlock Text="🏆" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <TextBlock Text="MAXIMUM SAFE OPTIMIZATION REACHED" FontSize="20" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="No additional safe background optimization was found." FontSize="13" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,20"/>
+
+                    <!-- Before / After Grid Summary -->
+                    <Border Background="{StaticResource BgBaseBrush}" CornerRadius="8" Padding="18" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" Margin="0,0,0,14">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Process Reduction -->
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="BACKGROUND WORKLOAD REDUCED" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding ProcessesReducedCount, StringFormat={}{0} processes reduced}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="1">
+                                <TextBlock Text="PROCESS COUNT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0">
+                                    <Run Text="{Binding InitialProcessCount, StringFormat='Before: {0} procs'}"/>
+                                    <Run Text=" → " Foreground="{StaticResource TextMutedBrush}"/>
+                                    <Run Text="{Binding CurrentProcessCount, StringFormat='After: {0} procs'}" Foreground="{StaticResource AccentBrush}" FontWeight="Bold"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- RAM Comparison -->
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="RAM USAGE (BEFORE / AFTER)" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0">
+                                    <Run Text="{Binding FormattedInitialRam}"/>
+                                    <Run Text=" → " Foreground="{StaticResource TextMutedBrush}"/>
+                                    <Run Text="{Binding FormattedFinalRam}" Foreground="{StaticResource SuccessBrush}" FontWeight="Bold"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="1">
+                                <TextBlock Text="RAM RECOVERED" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding FormattedRamRecovered}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" Margin="0,2,0,0"/>
+                            </StackPanel>
+
+                            <!-- CPU Background Activity -->
+                            <StackPanel Grid.Row="4" Grid.Column="0">
+                                <TextBlock Text="CPU BACKGROUND ACTIVITY" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0">
+                                    <Run Text="{Binding FormattedInitialCpu}"/>
+                                    <Run Text=" → " Foreground="{StaticResource TextMutedBrush}"/>
+                                    <Run Text="{Binding FormattedFinalCpu}" Foreground="{StaticResource SuccessBrush}" FontWeight="Bold"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Grid.Row="4" Grid.Column="1">
+                                <TextBlock Text="ACTIONS APPLIED / SKIPPED" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0">
+                                    <Run Text="{Binding ActionsAppliedCount, StringFormat={}{0} applied}" Foreground="{StaticResource SuccessBrush}"/>
+                                    <Run Text=" • " Foreground="{StaticResource TextMutedBrush}"/>
+                                    <Run Text="{Binding ActionsSkippedCount, StringFormat={}{0} skipped for safety}" Foreground="{StaticResource TextMutedBrush}"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- Protections -->
+                            <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2">
+                                <TextBlock Text="ACTIVE PROTECTION STATUS" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" Margin="0,0,8,0">
+                                        <TextBlock Text="Gaming protection: Protected" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                    <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3" Margin="0,0,8,0">
+                                        <TextBlock Text="Editing protection: Protected" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                    <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="8,3">
+                                        <TextBlock Text="Windows protection: Protected" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Result Action Buttons: DONE, VIEW DETAILS, RESTORE -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding DoneCommand}" Padding="0,10">
+                            <TextBlock Text="DONE" FontSize="12" FontWeight="Bold"/>
+                        </Button>
+
+                        <Button Grid.Column="2" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ToggleDetailsCommand}" Padding="0,10">
+                            <TextBlock Text="VIEW DETAILS" FontSize="12" FontWeight="SemiBold"/>
+                        </Button>
+
+                        <Button Grid.Column="4" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RollbackCommand}" Padding="0,10">
+                            <TextBlock Text="RESTORE" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"/>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <!-- ======================================================== -->
+        <!-- 5. ADVANCED DETAILS DRAWER / MODAL                       -->
+        <!-- ======================================================== -->
+        <Border Background="#F00A0A0C" CornerRadius="12" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" Padding="24"
+                Visibility="{Binding ShowAdvancedDetails, Converter={StaticResource BooleanToVisibilityConverter}}"
+                Panel.ZIndex="100">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="14"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Drawer Header -->
+                <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Adaptive Process Pipeline: " FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <TextBlock Text="Scan → Classify → Plan → Backup → Apply → Re-scan → Verify → Measure" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="V4 Advanced Technical Telemetry" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="{Binding LastBatchId, StringFormat='Rollback Transaction ID: {0}', TargetNullValue='Rollback Transaction ID: None'}"
+                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ScanCommand}" Padding="14,8" Margin="0,0,8,0">
-                            <TextBlock Text="Re-Scan System" FontSize="12" FontWeight="SemiBold"/>
-                        </Button>
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding PreviewCommand}" Padding="14,8" Margin="0,0,8,0">
-                            <TextBlock Text="Preview Plan" FontSize="12" FontWeight="SemiBold"/>
-                        </Button>
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RollbackCommand}" Padding="14,8" Margin="0,0,8,0">
-                            <TextBlock Text="Rollback" FontSize="12" FontWeight="SemiBold"/>
-                        </Button>
-                        <Button Style="{StaticResource PrimaryButtonStyle}" Command="{Binding ApplyOptimizationCommand}" Padding="18,8">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚡" Margin="0,0,6,0"/>
-                                <TextBlock Text="Optimize Maximum Performance" FontSize="12" FontWeight="Bold"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding CloseDetailsCommand}" Padding="12,6">
+                        <TextBlock Text="✕ CLOSE DETAILS" FontSize="11" FontWeight="Bold"/>
+                    </Button>
                 </Grid>
-            </Border>
 
-            <!-- 5. Multi-Pass Progression Timeline & System Performance Tuning Grid -->
-            <Grid Grid.Row="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="16"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+                <!-- Technical Content Tabs/Sections -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
+                    <StackPanel>
+                        <!-- Classification Breakdown -->
+                        <TextBlock Text="CLASSIFICATION AUDIT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                <!-- Pass Progression History Card -->
-                <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="12"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+                            <Border Grid.Column="0" Background="{StaticResource BgBaseBrush}" CornerRadius="6" Padding="10,8">
+                                <StackPanel>
+                                    <TextBlock Text="PROTECTED" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding ProtectedProcessCount}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                </StackPanel>
+                            </Border>
 
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Text="Multi-Pass Convergence Progression" Style="{StaticResource CardTitleStyle}"/>
-                            <TextBlock Text="Dynamic multi-pass convergence timeline reaching safe minimum" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                        </StackPanel>
+                            <Border Grid.Column="2" Background="{StaticResource BgBaseBrush}" CornerRadius="6" Padding="10,8">
+                                <StackPanel>
+                                    <TextBlock Text="REQUIRED" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding RequiredProcessCount}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Border>
 
-                        <ScrollViewer Grid.Row="2" MaxHeight="220" VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
-                            <ItemsControl ItemsSource="{Binding PassHistory}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
+                            <Border Grid.Column="4" Background="{StaticResource BgBaseBrush}" CornerRadius="6" Padding="10,8">
+                                <StackPanel>
+                                    <TextBlock Text="WORKLOAD" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding WorkloadProcessCount}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                </StackPanel>
+                            </Border>
 
-                                                <Border Grid.Column="0" Background="{StaticResource AccentBrush}" CornerRadius="4" Padding="6,3" Margin="0,0,10,0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding PassNumber, StringFormat='PASS {0}'}" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
+                            <Border Grid.Column="6" Background="{StaticResource BgBaseBrush}" CornerRadius="6" Padding="10,8">
+                                <StackPanel>
+                                    <TextBlock Text="REDUCIBLE" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding ReducibleProcessCount}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource WarningBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
 
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding StartProcessCount}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                        <TextBlock Text=" → " FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                                                        <TextBlock Text="{Binding EndProcessCount}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource AccentBrush}"/>
-                                                        <TextBlock Text=" procs" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                                                        <Border Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
-                                                            <TextBlock Text="{Binding ProcessesReduced, StringFormat='-{0} reduced'}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <TextBlock Text="{Binding PassSummary}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+                        <!-- Multi-Pass History -->
+                        <TextBlock Text="OPTIMIZATION PASS PROGRESSION" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding PassHistory}" Margin="0,0,0,14">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Background="{StaticResource AccentBrush}" CornerRadius="3" Padding="6,2" Margin="0,0,8,0">
+                                                <TextBlock Text="{Binding PassNumber, StringFormat='PASS {0}'}" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+
+                                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}">
+                                                <Run Text="{Binding StartProcessCount}" FontWeight="Bold"/>
+                                                <Run Text=" → " Foreground="{StaticResource TextMutedBrush}"/>
+                                                <Run Text="{Binding EndProcessCount}" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                                <Run Text=" procs (" Foreground="{StaticResource TextMutedBrush}"/>
+                                                <Run Text="{Binding ProcessesReduced, StringFormat='-{0} reduced'}" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold"/>
+                                                <Run Text=")" Foreground="{StaticResource TextMutedBrush}"/>
+                                            </TextBlock>
+
+                                            <TextBlock Grid.Column="2" Text="{Binding RamFreedMb, StringFormat={}{0:F0} MB freed}" FontSize="10" Foreground="{StaticResource SuccessBrush}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Actions Log -->
+                        <TextBlock Text="ACTIONS LOG &amp; VERIFICATION" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding ActionHistory}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding TargetIdentifier}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <Border Background="{StaticResource HoverBackgroundBrush}" CornerRadius="3" Padding="4,1" Margin="6,0,0,0">
+                                                        <TextBlock Text="{Binding ActionType}" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                                    </Border>
                                                 </StackPanel>
+                                                <TextBlock Text="{Binding Reason}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                <TextBlock Text="{Binding VerificationMessage}" FontSize="10" Foreground="{StaticResource SuccessBrush}" Margin="0,2,0,0"/>
+                                            </StackPanel>
 
-                                                <Border Grid.Column="2" Background="{StaticResource HoverBackgroundBrush}" CornerRadius="4" Padding="8,4" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding RamFreedMb, StringFormat={}{0:F0} MB freed}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-
-                <!-- System Tuning & Latency Profile Card -->
-                <Border Grid.Column="2" Style="{StaticResource GlassCardStyle}" Padding="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="12"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Text="System Performance &amp; Latency Tuning" Style="{StaticResource CardTitleStyle}"/>
-                            <TextBlock Text="OS kernel optimizations for maximum responsiveness and low jitter" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Row="2">
-                            <!-- MMCSS & Win32 Priority -->
-                            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="MMCSS &amp; Quantum Scheduling" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                        <TextBlock Text="{Binding Win32PriorityText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding MmcssStatusText}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                            <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                            </Border>
+                                        </Grid>
                                     </Border>
-                                </Grid>
-                            </Border>
-
-                            <!-- Standby Memory Purge -->
-                            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Standby Memory Cache Purge" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                        <TextBlock Text="Purged working set caches &amp; standby page list" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding StandbyPurgedText}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                                    </Border>
-                                </Grid>
-                            </Border>
-
-                            <!-- Network Throttling Index -->
-                            <Border Margin="0,0,0,0" Padding="12,8" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Network Latency &amp; Gaming Packet Throttling" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                        <TextBlock Text="{Binding NetworkThrottlingText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="3" Padding="6,2" VerticalAlignment="Center">
-                                        <TextBlock Text="0ms Delay" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                                    </Border>
-                                </Grid>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
-
-            <!-- 6. Optimization Candidates & Action History Section -->
-            <Grid Grid.Row="10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="16"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Candidates Panel -->
-                <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="12"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Text="Optimization Candidates" Style="{StaticResource CardTitleStyle}"/>
-                            <TextBlock Text="Verified non-essential items discovered for reduction" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                        </StackPanel>
-
-                        <ScrollViewer Grid.Row="2" MaxHeight="380" VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
-                            <ItemsControl ItemsSource="{Binding Candidates}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <StackPanel Grid.Column="0">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                        <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
-                                                            <TextBlock Text="{Binding Category}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <TextBlock Text="{Binding Reason}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                                                </StackPanel>
-
-                                                <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding ConfidenceBadge}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-
-                <!-- Actions & Verification History Panel -->
-                <Border Grid.Column="2" Style="{StaticResource GlassCardStyle}" Padding="18">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="12"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Text="Execution &amp; Verification State" Style="{StaticResource CardTitleStyle}"/>
-                            <TextBlock Text="{Binding StopReason, TargetNullValue='No optimization run yet.'}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                        </StackPanel>
-
-                        <ScrollViewer Grid.Row="2" MaxHeight="380" VerticalScrollBarVisibility="Auto" Style="{StaticResource SlimScrollViewer}">
-                            <ItemsControl ItemsSource="{Binding ActionHistory}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6" Background="{StaticResource BgBaseBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <StackPanel Grid.Column="0">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding TargetIdentifier}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                        <Border Background="{StaticResource HoverBackgroundBrush}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0">
-                                                            <TextBlock Text="{Binding ActionType}" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <TextBlock Text="{Binding VerificationMessage}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                                                </StackPanel>
-
-                                                <Border Grid.Column="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Background="{StaticResource SuccessSoftBrush}">
-                                                    <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-            </Grid>
-        </Grid>
-    </ScrollViewer>
+        </Border>
+    </Grid>
 </UserControl>

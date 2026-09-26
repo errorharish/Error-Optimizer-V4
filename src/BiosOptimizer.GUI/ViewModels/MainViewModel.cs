@@ -41,6 +41,30 @@ namespace BiosOptimizer.GUI.ViewModels
         }
 
         public ICommand NavigateCommand { get; }
+        public ICommand SwitchToV3Command { get; }
+        public ICommand SwitchToV4Command { get; }
+
+        // ── Generation Mode (V3 vs V4) ──────────────────────────────────
+        private bool _isV4Mode;
+        public bool IsV4Mode
+        {
+            get => _isV4Mode;
+            set
+            {
+                if (_isV4Mode != value)
+                {
+                    _isV4Mode = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsV3Mode));
+                }
+            }
+        }
+
+        public bool IsV3Mode
+        {
+            get => !_isV4Mode;
+            set => IsV4Mode = !value;
+        }
 
         // ── 10-Second Startup About Intro Flow ──────────────────────────
         private bool _isStartupIntroActive = false;
@@ -437,6 +461,18 @@ namespace BiosOptimizer.GUI.ViewModels
 
             NavigateCommand = new RelayCommand(async route => await NavigateAsync(route?.ToString() ?? "Dashboard"), route => !IsStartupIntroLocked || string.Equals(route?.ToString(), "About", StringComparison.OrdinalIgnoreCase));
 
+            SwitchToV3Command = new RelayCommand(async _ =>
+            {
+                IsV4Mode = false;
+                await NavigateAsync("Dashboard");
+            });
+
+            SwitchToV4Command = new RelayCommand(async _ =>
+            {
+                IsV4Mode = true;
+                await NavigateAsync("MaxPerformance");
+            });
+
             // Global error handler for Dispatcher exceptions (preventing blank pages)
             _showGlobalErrorAction = (ex) => 
             {
@@ -519,6 +555,17 @@ namespace BiosOptimizer.GUI.ViewModels
 
                 System.Diagnostics.Debug.WriteLine($"[NAV] Click Route: {key}");
                 BiosOptimizer.Core.Implementations.Diagnostics.ApplicationCrashLogger.Instance.RecordNavigation(key);
+
+                if (key.Equals("MaxPerformance", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("MaximumPerformance", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("V4MaxPerformance", StringComparison.OrdinalIgnoreCase))
+                {
+                    IsV4Mode = true;
+                }
+                else if (!key.Equals("About", StringComparison.OrdinalIgnoreCase))
+                {
+                    IsV4Mode = false;
+                }
 
                 if (key.Equals("Dashboard", StringComparison.OrdinalIgnoreCase))
                 {
