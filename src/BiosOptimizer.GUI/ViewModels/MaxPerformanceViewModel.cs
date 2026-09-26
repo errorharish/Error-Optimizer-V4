@@ -234,21 +234,32 @@ namespace BiosOptimizer.GUI.ViewModels
             ? $"{RamRecoveredMb / 1024.0:F1} GB recovered"
             : $"{RamRecoveredMb:F0} MB recovered";
 
-        private int _safeMinimumLow = 70;
+        // ── Dynamic Workload & Automatic Safe Optimization Wording ────
+        private string _dynamicReducibleWorkloadText = "Potentially Reducible Background Workload: Analyzing...";
+        public string DynamicReducibleWorkloadText
+        {
+            get => _dynamicReducibleWorkloadText;
+            set { _dynamicReducibleWorkloadText = value; OnPropertyChanged(); }
+        }
+
+        public string DynamicSafeOptimizationText => "Maximum Safe Optimization: Determined Automatically";
+        public string SystemOptimizationNoticeText => "Maximum safe optimization is determined automatically for this PC.";
+
+        private int _safeMinimumLow = 0;
         public int SafeMinimumLow
         {
             get => _safeMinimumLow;
-            set { _safeMinimumLow = value; OnPropertyChanged(); OnPropertyChanged(nameof(SafeMinimumRangeText)); }
+            set { _safeMinimumLow = value; OnPropertyChanged(); }
         }
 
-        private int _safeMinimumHigh = 85;
+        private int _safeMinimumHigh = 0;
         public int SafeMinimumHigh
         {
             get => _safeMinimumHigh;
-            set { _safeMinimumHigh = value; OnPropertyChanged(); OnPropertyChanged(nameof(SafeMinimumRangeText)); }
+            set { _safeMinimumHigh = value; OnPropertyChanged(); }
         }
 
-        public string SafeMinimumRangeText => $"{SafeMinimumLow}–{SafeMinimumHigh}";
+        public string SafeMinimumRangeText => "Determined Automatically";
 
         // ── Protection & Safety Shielding Status ──────────────────────
         public string BackupStatusText => "READY";
@@ -442,6 +453,10 @@ namespace BiosOptimizer.GUI.ViewModels
                             }
                         }
 
+                        DynamicReducibleWorkloadText = ReducibleProcessCount > 0
+                            ? $"Potentially Reducible Background Workload: {ReducibleProcessCount} candidates identified"
+                            : "Potentially Reducible Background Workload: System at baseline";
+
                         StatusMessage = $"Scan complete. {ReducibleProcessCount} reducible background items identified.";
                     }
                 }
@@ -464,6 +479,7 @@ namespace BiosOptimizer.GUI.ViewModels
         {
             IsBusy = true;
             CurrentViewMode = V4DashboardViewMode.Optimizing;
+            DynamicReducibleWorkloadText = "Potentially Reducible Background Workload: Optimizing...";
 
             // Initialize progression display with start count
             ProgressionSteps.Clear();
@@ -612,6 +628,7 @@ namespace BiosOptimizer.GUI.ViewModels
                         }
 
                         // Transition to final result screen
+                        DynamicReducibleWorkloadText = "Potentially Reducible Background Workload: Safe baseline reached";
                         CurrentViewMode = V4DashboardViewMode.Completed;
                         StatusMessage = "Maximum safe optimization reached.";
                     }

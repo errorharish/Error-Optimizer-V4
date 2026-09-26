@@ -118,5 +118,18 @@ namespace BiosOptimizer.Core.Tests.V4
             Assert.DoesNotContain("70 reached", vm.StopReason, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("No additional safe background optimization was found.", vm.StopReason);
         }
+
+        [Fact]
+        public void BeginnerWording_UsesDynamicDeterminedAutomaticallyInsteadOf70To85Floor()
+        {
+            var mockIpc = new MockIpcClient();
+            var vm = new MaxPerformanceViewModel(mockIpc);
+
+            Assert.Equal("Maximum Safe Optimization: Determined Automatically", vm.DynamicSafeOptimizationText);
+            Assert.Equal("Maximum safe optimization is determined automatically for this PC.", vm.SystemOptimizationNoticeText);
+            Assert.Contains("Potentially Reducible Background Workload:", vm.DynamicReducibleWorkloadText);
+            Assert.DoesNotContain("70–85", vm.SafeMinimumRangeText);
+            Assert.DoesNotContain("safe floor estimate", vm.DynamicSafeOptimizationText, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
