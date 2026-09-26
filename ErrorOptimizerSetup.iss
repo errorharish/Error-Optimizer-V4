@@ -1,12 +1,13 @@
 ; =====================================================================
-; Error Optimizer V3 - Production Inno Setup Script
+; Error Optimizer V4 - Production Inno Setup Script
 ; =====================================================================
 
-#define MyAppName "Error Optimizer V3"
-#define MyAppVersion "3.0.0"
+#define MyAppName "Error Optimizer"
+#define MyAppVersion "4.0.0"
 #define MyAppPublisher "Error Optimizer Team"
 #define MyAppURL "https://erroroptimizer.com"
 #define MyAppExeName "ErrorOptimizer.exe"
+#define MyAppV4ExeName "ERROR OPTIMIZER.exe"
 #define SourceDistDir "dist\win-x64"
 #define AssetsDir "assets"
 
@@ -15,14 +16,14 @@
 AppId={{D41A28A1-889B-4923-9D22-EC3619572B20}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName}
+AppVerName={#MyAppName} V{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 
 ; Installation Target
-DefaultDirName={autopf}\Error Optimizer V3
+DefaultDirName={autopf}\Error Optimizer
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 PrivilegesRequired=admin
@@ -40,7 +41,7 @@ DisableProgramGroupPage=yes
 Compression=lzma2/ultra64
 SolidCompression=yes
 OutputDir=dist\installer
-OutputBaseFilename=ErrorOptimizer_V3_Setup
+OutputBaseFilename=ErrorOptimizer_V4_Setup
 CloseApplications=force
 RestartApplications=no
 AppMutex=ErrorOptimizer_SingleInstance_Mutex,BiosOptimizer_Service_Mutex
@@ -61,15 +62,17 @@ Source: "{#AssetsDir}\Error Optimizer V3.ico"; DestDir: "{app}\assets"; Flags: i
 [Icons]
 ; Start Menu
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\ERROR OPTIMIZER"; Filename: "{app}\{#MyAppV4ExeName}"; IconFilename: "{app}\{#MyAppV4ExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 ; Desktop (Optional)
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\ERROR OPTIMIZER"; Filename: "{app}\{#MyAppV4ExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppV4ExeName}"
 
 [Registry]
 ; Configure clean per-machine installation metadata
-Root: HKLM; Subkey: "Software\Error Optimizer V3"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Error Optimizer V3"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Error Optimizer V3"; ValueType: string; ValueName: "ServicePath"; ValueData: "{app}\core\BiosOptimizer.Service.exe"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Error Optimizer"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Error Optimizer"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Error Optimizer"; ValueType: string; ValueName: "ServicePath"; ValueData: "{app}\core\BiosOptimizer.Service.exe"; Flags: uninsdeletekey
 
 [Run]
 ; Configure clean startup if task was selected
@@ -120,6 +123,7 @@ var
 begin
   Result := '';
   Exec('taskkill.exe', '/F /IM ErrorOptimizer.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM "ERROR OPTIMIZER.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM BiosOptimizer.Service.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM BiosOptimizer.CLI.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   CleanLegacyStartupRegistrations();
@@ -142,6 +146,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     Exec('taskkill.exe', '/F /IM ErrorOptimizer.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('taskkill.exe', '/F /IM "ERROR OPTIMIZER.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/F /IM BiosOptimizer.Service.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/F /IM BiosOptimizer.CLI.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     CleanLegacyStartupRegistrations();

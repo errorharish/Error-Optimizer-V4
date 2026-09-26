@@ -56,6 +56,8 @@ namespace BiosOptimizer.GUI.ViewModels
                     _isV4Mode = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(IsV3Mode));
+                    OnPropertyChanged(nameof(HeaderBrandTitle));
+                    OnPropertyChanged(nameof(WindowTitle));
                 }
             }
         }
@@ -65,6 +67,9 @@ namespace BiosOptimizer.GUI.ViewModels
             get => !_isV4Mode;
             set => IsV4Mode = !value;
         }
+
+        public string HeaderBrandTitle => _isV4Mode ? "ERROR OPTIMIZER V4" : "ERROR OPTIMIZER V3";
+        public string WindowTitle => _isV4Mode ? "Error Optimizer V4 — Maximum Performance" : "Error Optimizer V3";
 
         // ── 10-Second Startup About Intro Flow ──────────────────────────
         private bool _isStartupIntroActive = false;

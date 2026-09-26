@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:BiosOptimizer.GUI"
         xmlns:controls="clr-namespace:BiosOptimizer.GUI.Controls"
-        Title="Error Optimizer Pro" Icon="Assets/app_logo.ico" Height="780" Width="1280"
+        Title="{Binding WindowTitle, FallbackValue='Error Optimizer'}" Icon="Assets/app_logo.ico" Height="780" Width="1280"
         MinHeight="680" MinWidth="1100"
         Background="Transparent" AllowsTransparency="True" WindowStyle="None"
         ResizeMode="CanResize"
@@ -57,7 +57,7 @@
                                        UseLayoutRounding="True" SnapsToDevicePixels="True"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="ERROR OPTIMIZER V3" FontSize="12" FontWeight="Bold" Foreground="{StaticResource PrimaryTextBrush}" />
+                                <TextBlock Text="{Binding HeaderBrandTitle, FallbackValue='ERROR OPTIMIZER'}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource PrimaryTextBrush}" />
                                 <TextBlock FontSize="9" Foreground="{StaticResource SecondaryTextBrush}" Margin="0,1,0,0">
                                     <Run Text="BUILD ID: "/><Run Text="{Binding GuiBuildId, Mode=OneWay, FallbackValue='20260826'}"/>
                                 </TextBlock>
