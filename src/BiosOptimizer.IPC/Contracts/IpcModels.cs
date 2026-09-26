@@ -68,7 +68,15 @@ namespace BiosOptimizer.IPC.Contracts
         // Windows Servicing & Health Tools
         ExecuteServicingTool,
         GetServicingEnvironment,
-        EnsureServicingPrerequisites
+        EnsureServicingPrerequisites,
+        // V4 Maximum Performance
+        V4ScanProcessIntelligence,
+        V4GetMaximumPerformancePlan,
+        V4ExecuteMaximumPerformancePass,
+        V4ExecuteFullOptimization,
+        V4RollbackMaximumPerformance,
+        V4GetLiveMetrics,
+        V4GetOptimizationHistory
     }
 
     public class IpcMessage

@@ -60,6 +60,9 @@ namespace BiosOptimizer.GUI.Services
                 IpcMessageType.ApplyStorageCleanup => 300 * 1000, // 5 minutes
                 IpcMessageType.ApplyCleaner => 60 * 1000,
                 IpcMessageType.EmptyRecycleBin => 60 * 1000,
+                IpcMessageType.V4ExecuteFullOptimization => 180 * 1000, // 3 minutes for multi-pass V4 adaptive loop
+                IpcMessageType.V4ScanProcessIntelligence => 30 * 1000,
+                IpcMessageType.V4GetMaximumPerformancePlan => 30 * 1000,
                 _ => DefaultRequestTimeoutMs
             };
         }

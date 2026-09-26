@@ -389,7 +389,9 @@ namespace BiosOptimizer.GUI.ViewModels
 
                 ["BiosSafe"]       = () => new TierViewModel(ipc, "BiosSafe", "BIOS Safe", "Safe firmware-aware analysis and UEFI hardware optimization."),
 
-                ["MaxPerformance"] = () => new TierViewModel(ipc, "MaximumPerformance", "Maximum Performance", "Extreme optimizations for gaming and rendering."),
+                ["MaxPerformance"] = () => new MaxPerformanceViewModel(ipc),
+                ["MaximumPerformance"] = () => new MaxPerformanceViewModel(ipc),
+                ["V4MaxPerformance"] = () => new MaxPerformanceViewModel(ipc),
 
                 ["AiOptimization"] = () => new AiOptimizationViewModel(ipc),
 

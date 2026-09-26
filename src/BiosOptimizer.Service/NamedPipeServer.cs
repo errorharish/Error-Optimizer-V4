@@ -2280,11 +2280,14 @@ namespace BiosOptimizer.Service
                 IpcMessageType.GetServicingEnvironment  => await GetServicingEnvironmentAsync(),
                 IpcMessageType.EnsureServicingPrerequisites => await EnsureServicingPrerequisitesAsync(msg.Payload),
 
-
-
-
-
-
+                // V4 Maximum Performance
+                IpcMessageType.V4ScanProcessIntelligence => await V4ScanProcessIntelligenceAsync(),
+                IpcMessageType.V4GetMaximumPerformancePlan => await V4GetMaximumPerformancePlanAsync(msg.Payload),
+                IpcMessageType.V4ExecuteMaximumPerformancePass => await V4ExecuteMaximumPerformancePassAsync(msg.Payload, ct),
+                IpcMessageType.V4ExecuteFullOptimization => await V4ExecuteFullOptimizationAsync(msg.Payload, ct),
+                IpcMessageType.V4RollbackMaximumPerformance => await V4RollbackMaximumPerformanceAsync(msg.Payload),
+                IpcMessageType.V4GetLiveMetrics          => V4GetLiveMetricsImpl(),
+                IpcMessageType.V4GetOptimizationHistory  => V4GetOptimizationHistoryImpl(),
 
                 _                                     => Fail("Unknown message type: " + msg.Type)
 
@@ -7909,6 +7912,124 @@ namespace BiosOptimizer.Service
                     return Fail($"Failed to remediate servicing prerequisites: {ex.Message}");
                 }
             });
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // V4 MAXIMUM PERFORMANCE IPC HANDLERS
+        // ══════════════════════════════════════════════════════════════════
+
+        private async Task<IpcResponse> V4ScanProcessIntelligenceAsync()
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var snapshot = await coordinator.ScanProcessesAsync();
+                return Ok(JsonSerializer.Serialize(snapshot));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Process Scan failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4GetMaximumPerformancePlanAsync(string? payload)
+        {
+            try
+            {
+                int pass = 1;
+                if (!string.IsNullOrEmpty(payload) && int.TryParse(payload, out int p))
+                {
+                    pass = p;
+                }
+
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var plan = await coordinator.GeneratePlanAsync(pass);
+                return Ok(JsonSerializer.Serialize(plan));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Plan generation failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4ExecuteMaximumPerformancePassAsync(string? payload, CancellationToken ct)
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses: 1, ct);
+                return Ok(JsonSerializer.Serialize(result));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Pass execution failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4ExecuteFullOptimizationAsync(string? payload, CancellationToken ct)
+        {
+            try
+            {
+                int maxPasses = 4;
+                if (!string.IsNullOrEmpty(payload) && int.TryParse(payload, out int p))
+                {
+                    maxPasses = p;
+                }
+
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses, ct);
+                return Ok(JsonSerializer.Serialize(result));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Full Optimization failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4RollbackMaximumPerformanceAsync(string? payload)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    string batchId = payload ?? string.Empty;
+                    var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                    bool ok = coordinator.RollbackOptimization(batchId, out int restored, out int failed, out string msg);
+                    return Ok(JsonSerializer.Serialize(new { Success = ok, RestoredCount = restored, FailedCount = failed, Message = msg }));
+                }
+                catch (Exception ex)
+                {
+                    return Fail($"V4 Rollback failed: {ex.Message}");
+                }
+            });
+        }
+
+        private IpcResponse V4GetLiveMetricsImpl()
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var metrics = coordinator.GetLiveMetrics();
+                return Ok(JsonSerializer.Serialize(metrics));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Live Metrics failed: {ex.Message}");
+            }
+        }
+
+        private IpcResponse V4GetOptimizationHistoryImpl()
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var records = coordinator.RollbackEngine.GetTransactions();
+                return Ok(JsonSerializer.Serialize(records));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 History query failed: {ex.Message}");
+            }
         }
     }
 }
