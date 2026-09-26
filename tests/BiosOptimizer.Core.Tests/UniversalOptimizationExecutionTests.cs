@@ -1437,7 +1437,7 @@ namespace BiosOptimizer.Core.Tests
         [Fact]
         public void TestY_RegistryTweaksToolbar_RestoreSelectedRemoved_AndCleanReflow()
         {
-            string xamlPath = @"D:\PROJECTS FOR EXE\ON PROCESS\ERROR OPTIMIZER\src\BiosOptimizer.GUI\Views\RegistryTweakView.xaml";
+            string xamlPath = GetGuiFilePath(@"Views\RegistryTweakView.xaml");
             string content = File.ReadAllText(xamlPath);
 
             // Assert Restore Selected button is completely removed from UI
@@ -1559,7 +1559,7 @@ namespace BiosOptimizer.Core.Tests
             Assert.Equal(0, killed);
 
             // Verify UI structure in XAML
-            string xamlPath = @"D:\PROJECTS FOR EXE\ON PROCESS\ERROR OPTIMIZER\src\BiosOptimizer.GUI\Views\ProcessReductionView.xaml";
+            string xamlPath = GetGuiFilePath(@"Views\ProcessReductionView.xaml");
             string content = File.ReadAllText(xamlPath);
             Assert.Contains("PROCESS INTELLIGENCE", content);
             Assert.Contains("SAFE BACKGROUND PROCESS MANAGEMENT", content);
@@ -1573,7 +1573,7 @@ namespace BiosOptimizer.Core.Tests
         [Fact]
         public void NoUnderlyingProgressBar_InTierViewXaml()
         {
-            string xamlPath = @"D:\PROJECTS FOR EXE\ON PROCESS\ERROR OPTIMIZER\src\BiosOptimizer.GUI\Views\TierView.xaml";
+            string xamlPath = GetGuiFilePath(@"Views\TierView.xaml");
             string content = File.ReadAllText(xamlPath);
 
             // Row 14's duplicate progress bar should be removed
@@ -1613,7 +1613,7 @@ namespace BiosOptimizer.Core.Tests
             Assert.NotNull(advRes.Message);
 
             // 4. Verify InputOptimizerView.xaml layout and elements
-            string xamlPath = @"D:\PROJECTS FOR EXE\ON PROCESS\ERROR OPTIMIZER\src\BiosOptimizer.GUI\Views\InputOptimizerView.xaml";
+            string xamlPath = GetGuiFilePath(@"Views\InputOptimizerView.xaml");
             string content = File.ReadAllText(xamlPath);
 
             Assert.Contains("INPUT OPTIMIZER", content);
@@ -1784,7 +1784,7 @@ namespace BiosOptimizer.Core.Tests
         [Fact]
         public void Test_UniversalOptimizationModal_Xaml_Contains_State_0C_And_Key_Bindings()
         {
-            string modalXamlPath = @"D:\PROJECTS FOR EXE\ON PROCESS\ERROR OPTIMIZER\src\BiosOptimizer.GUI\Controls\UniversalOptimizationModal.xaml";
+            string modalXamlPath = GetGuiFilePath(@"Controls\UniversalOptimizationModal.xaml");
             string content = File.ReadAllText(modalXamlPath);
 
             Assert.Contains("STATE 0C: SYSTEM PROTECTION REQUIRED MODAL", content);
@@ -2032,6 +2032,17 @@ namespace BiosOptimizer.Core.Tests
 
             Assert.False(msiItem.IsRunning, "MSI App Player must be NOT RUNNING when no sessions exist.");
             Assert.False(bs5Item.IsRunning, "BlueStacks 5 must be NOT RUNNING when no sessions exist.");
+        }
+
+        private static string GetGuiFilePath(string relativePath)
+        {
+            var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "BiosOptimizer.sln")))
+            {
+                dir = dir.Parent;
+            }
+            string root = dir?.FullName ?? @"d:\SOFTWARE PROJECTS\ERROR OPTIMIZER";
+            return Path.Combine(root, "src", "BiosOptimizer.GUI", relativePath);
         }
     }
 }
