@@ -26,13 +26,13 @@ namespace BiosOptimizer.GUI.Services
 
                 // ── Visual / Theme / Material ─────────────────────────────────────
         private int _themeMode = 0; // 0=Solid, 1=Gradient
-        private string _gradientStops = "[{\"Hex\":\"#00D4FF\",\"Offset\":0.0},{\"Hex\":\"#0051FF\",\"Offset\":0.5},{\"Hex\":\"#7A00FF\",\"Offset\":1.0}]";
+        private string _gradientStops = "[{\"Hex\":\"#5E6AD2\",\"Offset\":0.0},{\"Hex\":\"#4A56C4\",\"Offset\":0.5},{\"Hex\":\"#0D0D0F\",\"Offset\":1.0}]";
         private double _gradientAngle = 90.0;
         private string _gradientDirection = "LeftToRight";
         private int _gradientAnimationMode = 1; // 0=Off, 1=Subtle, 2=Dynamic
         private string _siriFocalColorMode = "Auto"; // Auto, Color 1, Color 2, Color 3, Custom
-        private string _siriFocalCustomColor = "#00D4FF";
-        private string _accentColor = "#E53935";
+        private string _siriFocalCustomColor = "#5E6AD2";
+        private string _accentColor = "#5E6AD2";
         private double _windowGlassTransparency = 0.0; // 0.0=Opaque, 0.40=Max Translucent
         private double _cardOpacity = 0.90;            // 0.60=Max Translucent, 0.98=Solid
         private bool _animationsEnabled = true;
@@ -89,13 +89,16 @@ namespace BiosOptimizer.GUI.Services
 
         // ── Windows Startup & Background ──────────────────────────────────
         private bool _startWithWindows = false;
-        private bool _startMinimized = false;
+        private bool _startMinimized = true;
 
         // ── AI Engine Auto-Start ──────────────────────────────────────────
         private bool _aiPowerPlanAutoEnable = false;
         private bool _aiWorkloadAutoStart = true;
         private bool _aiRamLimiterAutoStart = true;
-        private bool _smartAutoOptimizeAutoStart = true;
+        private bool _smartAutoOptimizeAutoStart = false;
+        private bool _hasRunOptimization = false;
+        private string _lastOptimizationDate = "";
+        private int _lastOptimizedActionsCount = 0;
 
         public event Action<string, object, object>? SettingChanged;
         public event Action? SettingsChanged;
@@ -1005,14 +1008,6 @@ namespace BiosOptimizer.GUI.Services
                 if (_aiRamLimiterAutoStart == value) return;
                 var old = _aiRamLimiterAutoStart;
                 _aiRamLimiterAutoStart = value;
-                try
-                {
-                    if (value)
-                        BiosOptimizer.Core.Implementations.RamLimiterEngine.Instance.Start();
-                    else
-                        BiosOptimizer.Core.Implementations.RamLimiterEngine.Instance.Stop();
-                }
-                catch { }
                 ScheduleSave();
                 NotifyChanged(nameof(AiRamLimiterAutoStart), old, value);
             }
@@ -1031,6 +1026,45 @@ namespace BiosOptimizer.GUI.Services
             }
         }
 
+        public bool HasRunOptimization
+        {
+            get => _hasRunOptimization;
+            set
+            {
+                if (_hasRunOptimization == value) return;
+                var old = _hasRunOptimization;
+                _hasRunOptimization = value;
+                ScheduleSave();
+                NotifyChanged(nameof(HasRunOptimization), old, value);
+            }
+        }
+
+        public string LastOptimizationDate
+        {
+            get => _lastOptimizationDate;
+            set
+            {
+                if (_lastOptimizationDate == value) return;
+                var old = _lastOptimizationDate;
+                _lastOptimizationDate = value;
+                ScheduleSave();
+                NotifyChanged(nameof(LastOptimizationDate), old, value);
+            }
+        }
+
+        public int LastOptimizedActionsCount
+        {
+            get => _lastOptimizedActionsCount;
+            set
+            {
+                if (_lastOptimizedActionsCount == value) return;
+                var old = _lastOptimizedActionsCount;
+                _lastOptimizedActionsCount = value;
+                ScheduleSave();
+                NotifyChanged(nameof(LastOptimizedActionsCount), old, value);
+            }
+        }
+
         public AppSettingsService()
         {
             _settingsFilePath = Path.Combine(SettingsDirectory, "settings.json");
@@ -1040,7 +1074,7 @@ namespace BiosOptimizer.GUI.Services
 
         public void ResetToDefaults()
         {
-            _accentColor = "#E53935";
+            _accentColor = "#CBD5E1";
             _windowGlassTransparency = 0.0;
             _cardOpacity = 0.90;
             _animationsEnabled = true;
@@ -1085,11 +1119,14 @@ namespace BiosOptimizer.GUI.Services
             _detailedLogs = false;
             _logRetentionDays = 7;
             _startWithWindows = false;
-            _startMinimized = false;
+            _startMinimized = true;
             _aiPowerPlanAutoEnable = false;
             _aiWorkloadAutoStart = true;
             _aiRamLimiterAutoStart = true;
-            _smartAutoOptimizeAutoStart = true;
+            _smartAutoOptimizeAutoStart = false;
+            _hasRunOptimization = false;
+            _lastOptimizationDate = "";
+            _lastOptimizedActionsCount = 0;
 
             SynchronizeWithRealWindowsStartup();
             ThemeBrushService.Instance.ApplyAccentColor(_accentColor);
@@ -1112,7 +1149,7 @@ namespace BiosOptimizer.GUI.Services
                         var dto = JsonSerializer.Deserialize<SettingsDto>(json);
                         if (dto != null)
                         {
-                            _accentColor = !string.IsNullOrWhiteSpace(dto.AccentColor) ? dto.AccentColor : "#E53935";
+                            _accentColor = !string.IsNullOrWhiteSpace(dto.AccentColor) && !dto.AccentColor.Equals("#E53935", StringComparison.OrdinalIgnoreCase) && !dto.AccentColor.Equals("#CBD5E1", StringComparison.OrdinalIgnoreCase) ? dto.AccentColor : "#B5BBC1";
                             _windowGlassTransparency = Math.Clamp(dto.WindowGlassTransparency, 0.0, 0.40);
                             _cardOpacity = Math.Clamp(dto.CardOpacity > 0 ? dto.CardOpacity : 0.90, 0.60, 0.98);
                             _animationsEnabled = dto.AnimationsEnabled;
@@ -1162,6 +1199,9 @@ namespace BiosOptimizer.GUI.Services
                             _aiWorkloadAutoStart = dto.AiWorkloadAutoStart;
                             _aiRamLimiterAutoStart = dto.AiRamLimiterAutoStart;
                             _smartAutoOptimizeAutoStart = dto.SmartAutoOptimizeAutoStart;
+                            _hasRunOptimization = dto.HasRunOptimization;
+                            _lastOptimizationDate = dto.LastOptimizationDate ?? "";
+                            _lastOptimizedActionsCount = dto.LastOptimizedActionsCount;
                             _themeMode = dto.ThemeMode;
                             if (!string.IsNullOrWhiteSpace(dto.GradientStops)) _gradientStops = dto.GradientStops;
                             _gradientAngle = dto.GradientAngle;
@@ -1266,6 +1306,9 @@ namespace BiosOptimizer.GUI.Services
                         AiWorkloadAutoStart = _aiWorkloadAutoStart,
                         AiRamLimiterAutoStart = _aiRamLimiterAutoStart,
                         SmartAutoOptimizeAutoStart = _smartAutoOptimizeAutoStart,
+                        HasRunOptimization = _hasRunOptimization,
+                        LastOptimizationDate = _lastOptimizationDate,
+                        LastOptimizedActionsCount = _lastOptimizedActionsCount,
                         ThemeMode = _themeMode,
                         GradientStops = _gradientStops,
                         GradientAngle = _gradientAngle,
@@ -1314,7 +1357,7 @@ namespace BiosOptimizer.GUI.Services
 
         private sealed class SettingsDto
         {
-            public string AccentColor { get; set; } = "#E53935";
+            public string AccentColor { get; set; } = "#B5BBC1";
             public double WindowGlassTransparency { get; set; } = 0.0;
             public double CardOpacity { get; set; } = 0.90;
             public bool AnimationsEnabled { get; set; } = true;
@@ -1339,7 +1382,10 @@ namespace BiosOptimizer.GUI.Services
             public bool AiPowerPlanAutoEnable { get; set; } = false;
             public bool AiWorkloadAutoStart { get; set; } = true;
             public bool AiRamLimiterAutoStart { get; set; } = true;
-            public bool SmartAutoOptimizeAutoStart { get; set; } = true;
+            public bool SmartAutoOptimizeAutoStart { get; set; } = false;
+            public bool HasRunOptimization { get; set; } = false;
+            public string LastOptimizationDate { get; set; } = "";
+            public int LastOptimizedActionsCount { get; set; } = 0;
             public double AnimationSpeed { get; set; } = 1.0;
             public double GlowIntensity { get; set; } = 0.70;
             public double BackgroundBlur { get; set; } = 30.0;
@@ -1370,7 +1416,7 @@ namespace BiosOptimizer.GUI.Services
             public string GradientDirection { get; set; } = "LeftToRight";
             public int GradientAnimationMode { get; set; } = 1;
             public string SiriFocalColorMode { get; set; } = "Auto";
-            public string SiriFocalCustomColor { get; set; } = "#00D4FF";
+            public string SiriFocalCustomColor { get; set; } = "#7040A8";
         }
     }
 }

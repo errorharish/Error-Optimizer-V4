@@ -67,7 +67,7 @@ namespace BiosOptimizer.Core.Implementations
                     }
                     else
                     {
-                        cpu.Virtualization = "Hardware Supported (VT-x / AMD-V)";
+                        cpu.Virtualization = "Unavailable";
                     }
 
                     cpu.Architecture = Environment.Is64BitOperatingSystem ? "x64 (64-bit Architecture)" : "x86 (32-bit Architecture)";
@@ -282,18 +282,21 @@ namespace BiosOptimizer.Core.Implementations
             mem.UsagePercentage = Math.Round(pct, 1);
             mem.VirtualMemoryText = $"{totalVirtualKb / (1024.0 * 1024.0):F1} GB ({freeVirtualKb / (1024.0 * 1024.0):F1} GB Free)";
 
-            // Read physical sticks
+            // Read physical DIMM sticks first so InstalledRamText reflects true SMBIOS physical RAM
             mem.Modules.Clear();
             int slotCount = 0;
             int maxSpeed = 0;
-            string memoryTypeStr = "DDR4 / DDR5";
+            long installedSmbiosBytes = 0;
+            string memoryTypeStr = "Unknown";
 
-            using (var memSearcher = new ManagementObjectSearcher("SELECT Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, DeviceLocator, SMBIOSMemoryType FROM Win32_PhysicalMemory"))
+            try
             {
+                using var memSearcher = new ManagementObjectSearcher("SELECT Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, DeviceLocator, SMBIOSMemoryType FROM Win32_PhysicalMemory");
                 foreach (var obj in memSearcher.Get())
                 {
                     slotCount++;
                     long.TryParse(obj["Capacity"]?.ToString(), out long capBytes);
+                    if (capBytes > 0) installedSmbiosBytes += capBytes;
                     int.TryParse(obj["ConfiguredClockSpeed"]?.ToString(), out int confSpeed);
                     if (confSpeed == 0) int.TryParse(obj["Speed"]?.ToString(), out confSpeed);
                     if (confSpeed > maxSpeed) maxSpeed = confSpeed;
@@ -311,19 +314,39 @@ namespace BiosOptimizer.Core.Implementations
                     mem.Modules.Add(new MemoryModuleInfo
                     {
                         BankLocator = loc,
-                        CapacityText = $"{capBytes / (1024.0 * 1024.0 * 1024.0):F0} GB",
-                        SpeedText = confSpeed > 0 ? $"{confSpeed} MT/s" : "Standard Speed",
+                        CapacityText = capBytes > 0 ? $"{capBytes / (1024.0 * 1024.0 * 1024.0):F0} GB" : "Unknown",
+                        SpeedText = confSpeed > 0 ? $"{confSpeed} MT/s" : "Unknown",
                         Manufacturer = mfg,
                         PartNumber = part
                     });
                 }
             }
+            catch { }
+
+            double? smbiosGb = installedSmbiosBytes > 0
+                ? Math.Round(installedSmbiosBytes / (1024.0 * 1024.0 * 1024.0), 1)
+                : HardwareDetectionService.DetectInstalledRamGb();
+            if (smbiosGb.HasValue && smbiosGb.Value > 0)
+            {
+                mem.InstalledRamText = $"{smbiosGb.Value:F0} GB Total Installed";
+            }
 
             mem.MemoryType = memoryTypeStr;
-            mem.SpeedText = maxSpeed > 0 ? $"{maxSpeed} MT/s" : "High-Speed Memory";
+            mem.SpeedText = maxSpeed > 0 ? $"{maxSpeed} MT/s" : "Unknown";
             mem.UsedSlots = slotCount;
-            mem.TotalSlots = Math.Max(slotCount, 2);
-            mem.ChannelConfig = slotCount >= 2 ? "Dual Channel (128-bit)" : "Single Channel (64-bit)";
+            int totalArraySlots = 0;
+            try
+            {
+                using var arrSearcher = new ManagementObjectSearcher("SELECT MemoryDevices FROM Win32_PhysicalMemoryArray");
+                foreach (var obj in arrSearcher.Get())
+                {
+                    if (int.TryParse(obj["MemoryDevices"]?.ToString(), out int dc))
+                        totalArraySlots += dc;
+                }
+            }
+            catch { }
+            mem.TotalSlots = totalArraySlots > 0 ? totalArraySlots : slotCount;
+            mem.ChannelConfig = slotCount >= 4 ? "Quad Channel" : slotCount >= 2 ? "Dual Channel (128-bit)" : (slotCount == 1 ? "Single Channel (64-bit)" : "Unknown");
         }
 
         private void ReadStorage(DetailedStorageInfo storage)
@@ -331,16 +354,45 @@ namespace BiosOptimizer.Core.Implementations
             storage.PhysicalDisks.Clear();
             storage.Partitions.Clear();
 
+            string sysRoot = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+            string sysLetter = sysRoot.TrimEnd('\\');
+            var volToDisk = BiosOptimizer.Core.Implementations.Storage.StorageEngine.GetVolumeToDiskIndexMap();
+            int sysDiskIdx = volToDisk.TryGetValue(sysLetter, out int mappedSys) ? mappedSys : 0;
+
             // 1. Physical Disks via MSFT_PhysicalDisk or Win32_DiskDrive
             try
             {
+                var reliabilityTemps = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    using var tempSearcher = new ManagementObjectSearcher(
+                        new ManagementScope(@"\\.\root\microsoft\windows\storage"),
+                        new ObjectQuery("SELECT ObjectId, Temperature FROM MSFT_StorageReliabilityCounter"));
+                    foreach (var tObj in tempSearcher.Get())
+                    {
+                        string? objId = tObj["ObjectId"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(objId) &&
+                            tObj["Temperature"] != null &&
+                            double.TryParse(tObj["Temperature"].ToString(), out double deg) &&
+                            deg > 0 && deg < 120)
+                        {
+                            // MSFT_StorageReliabilityCounter ObjectId typically ends with disk DeviceId/ObjectId segment
+                            reliabilityTemps[objId] = deg;
+                        }
+                    }
+                }
+                catch { }
+
                 using var scope = new ManagementObjectSearcher(
                     new ManagementScope(@"\\.\root\microsoft\windows\storage"),
-                    new ObjectQuery("SELECT FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
+                    new ObjectQuery("SELECT DeviceId, ObjectId, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
 
                 foreach (var obj in scope.Get())
                 {
                     string name = obj["FriendlyName"]?.ToString() ?? "Physical Drive";
+                    string devId = obj["DeviceId"]?.ToString() ?? "";
+                    string diskObjId = obj["ObjectId"]?.ToString() ?? "";
+                    int.TryParse(devId, out int diskIdx);
                     int.TryParse(obj["MediaType"]?.ToString(), out int mediaType);
                     int.TryParse(obj["BusType"]?.ToString(), out int busType);
                     long.TryParse(obj["Size"]?.ToString(), out long sizeBytes);
@@ -350,8 +402,19 @@ namespace BiosOptimizer.Core.Implementations
                                      mediaType == 4 ? "SATA SSD" :
                                      mediaType == 3 ? "HDD" : "Solid State Drive";
 
-                    string busStr = (busType == 17) ? "PCIe / NVMe" : (busType == 11) ? "SATA 6Gbps" : "High-Speed Bus";
-                    string healthStr = health == 0 ? "HEALTHY" : health == 1 ? "WARNING" : "UNHEALTHY";
+                    string busStr = (busType == 17) ? "PCIe / NVMe" : (busType == 11) ? "SATA 6Gbps" : $"Bus {busType}";
+                    string healthStr = health == 0 ? "HEALTHY" : health == 1 ? "WARNING" : health == 2 ? "UNHEALTHY" : "UNKNOWN";
+
+                    string tempStr = "Unavailable";
+                    if (!string.IsNullOrWhiteSpace(devId))
+                    {
+                        var matchedTemp = reliabilityTemps.FirstOrDefault(kv =>
+                            (!string.IsNullOrWhiteSpace(diskObjId) && kv.Key.Contains(diskObjId, StringComparison.OrdinalIgnoreCase)) ||
+                            kv.Key.Contains($"PhysicalDisk{devId}", StringComparison.OrdinalIgnoreCase) ||
+                            kv.Key.EndsWith($":{devId}", StringComparison.OrdinalIgnoreCase));
+                        if (matchedTemp.Value > 0)
+                            tempStr = $"{matchedTemp.Value:F0} °C";
+                    }
 
                     storage.PhysicalDisks.Add(new PhysicalDiskInfo
                     {
@@ -360,23 +423,28 @@ namespace BiosOptimizer.Core.Implementations
                         BusType = busStr,
                         SizeText = $"{sizeBytes / (1024.0 * 1024.0 * 1024.0):F0} GB",
                         HealthStatus = healthStr,
-                        Temperature = "Operating Normal",
-                        IsSystemDisk = storage.PhysicalDisks.Count == 0
+                        Temperature = tempStr,
+                        IsSystemDisk = diskIdx == sysDiskIdx
                     });
                 }
             }
             catch
             {
                 // Fallback to Win32_DiskDrive
-                using var ddSearcher = new ManagementObjectSearcher("SELECT Model, Size, InterfaceType FROM Win32_DiskDrive");
+                using var ddSearcher = new ManagementObjectSearcher("SELECT Index, Model, Size, InterfaceType, Status FROM Win32_DiskDrive");
                 foreach (var obj in ddSearcher.Get())
                 {
+                    int.TryParse(obj["Index"]?.ToString(), out int diskIdx);
                     string model = obj["Model"]?.ToString() ?? "Disk Drive";
                     long.TryParse(obj["Size"]?.ToString(), out long size);
                     string iface = obj["InterfaceType"]?.ToString() ?? "SCSI";
+                    string wmiStatus = obj["Status"]?.ToString()?.Trim() ?? "";
 
                     string type = model.Contains("NVMe", StringComparison.OrdinalIgnoreCase) ? "NVMe SSD" :
                                   model.Contains("SSD", StringComparison.OrdinalIgnoreCase) ? "SATA SSD" : "Hard Disk Drive";
+
+                    string healthStr = wmiStatus.Equals("OK", StringComparison.OrdinalIgnoreCase) ? "HEALTHY" :
+                                       string.IsNullOrWhiteSpace(wmiStatus) ? "UNKNOWN" : wmiStatus.ToUpperInvariant();
 
                     storage.PhysicalDisks.Add(new PhysicalDiskInfo
                     {
@@ -384,43 +452,39 @@ namespace BiosOptimizer.Core.Implementations
                         MediaType = type,
                         BusType = iface,
                         SizeText = $"{size / (1024.0 * 1024.0 * 1024.0):F0} GB",
-                        HealthStatus = "HEALTHY",
-                        Temperature = "Normal",
-                        IsSystemDisk = storage.PhysicalDisks.Count == 0
+                        HealthStatus = healthStr,
+                        Temperature = "Unavailable",
+                        IsSystemDisk = diskIdx == sysDiskIdx
                     });
                 }
             }
 
-            // 2. Volumes / Partitions via DriveInfo
-            string sysRoot = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
-            foreach (var d in DriveInfo.GetDrives())
+            // 2. Fixed Unique Logical Volumes via StorageEngine (deduplicated by VolumeGuid)
+            foreach (var d in BiosOptimizer.Core.Implementations.Storage.StorageEngine.GetUniqueFixedDrives())
             {
-                if (d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Removable))
+                long total = d.TotalSize;
+                long free = d.AvailableFreeSpace;
+                long used = total > free ? total - free : 0;
+
+                double totalGb = total / (1024.0 * 1024.0 * 1024.0);
+                double usedGb = used / (1024.0 * 1024.0 * 1024.0);
+                double freeGb = free / (1024.0 * 1024.0 * 1024.0);
+                double pct = total > 0 ? (used / (double)total) * 100.0 : 0;
+
+                bool isSys = string.Equals(d.RootDirectory.FullName, sysRoot, StringComparison.OrdinalIgnoreCase);
+
+                storage.Partitions.Add(new VolumePartitionInfo
                 {
-                    long total = d.TotalSize;
-                    long free = d.TotalFreeSpace;
-                    long used = total - free;
-
-                    double totalGb = total / (1024.0 * 1024.0 * 1024.0);
-                    double usedGb = used / (1024.0 * 1024.0 * 1024.0);
-                    double freeGb = free / (1024.0 * 1024.0 * 1024.0);
-                    double pct = total > 0 ? (used / (double)total) * 100.0 : 0;
-
-                    bool isSys = string.Equals(d.RootDirectory.FullName, sysRoot, StringComparison.OrdinalIgnoreCase);
-
-                    storage.Partitions.Add(new VolumePartitionInfo
-                    {
-                        DriveLetter = d.Name.TrimEnd('\\'),
-                        Label = string.IsNullOrEmpty(d.VolumeLabel) ? (isSys ? "Windows (System)" : "Local Disk") : d.VolumeLabel,
-                        Format = d.DriveFormat,
-                        TotalText = $"{totalGb:F1} GB",
-                        UsedText = $"{usedGb:F1} GB",
-                        FreeText = $"{freeGb:F1} GB Free",
-                        UsagePercentage = Math.Round(pct, 1),
-                        IsSystemDrive = isSys,
-                        HealthBadge = pct > 90 ? "WARNING (LOW SPACE)" : "HEALTHY"
-                    });
-                }
+                    DriveLetter = d.Name.TrimEnd('\\'),
+                    Label = string.IsNullOrEmpty(d.VolumeLabel) ? (isSys ? "Windows (System)" : "Local Disk") : d.VolumeLabel,
+                    Format = d.DriveFormat,
+                    TotalText = $"{totalGb:F1} GB",
+                    UsedText = $"{usedGb:F1} GB",
+                    FreeText = $"{freeGb:F1} GB Free",
+                    UsagePercentage = Math.Round(pct, 1),
+                    IsSystemDrive = isSys,
+                    HealthBadge = pct > 90 ? "WARNING (LOW SPACE)" : "HEALTHY"
+                });
             }
         }
 
@@ -461,6 +525,17 @@ namespace BiosOptimizer.Core.Implementations
                 }
             }
 
+            // Firmware Boot Mode (PEFirmwareType: 2=UEFI, 1=BIOS)
+            try
+            {
+                using var sysCtrlKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control");
+                var fwVal = sysCtrlKey?.GetValue("PEFirmwareType");
+                mb.FirmwareType = fwVal != null && int.TryParse(fwVal.ToString(), out int ft)
+                    ? (ft == 2 ? "UEFI" : ft == 1 ? "Legacy BIOS" : "Unknown")
+                    : "Unknown";
+            }
+            catch { mb.FirmwareType = "Unknown"; }
+
             // Secure Boot
             try
             {
@@ -468,23 +543,40 @@ namespace BiosOptimizer.Core.Implementations
                 if (key != null)
                 {
                     var val = key.GetValue("UEFISecureBootEnabled");
-                    mb.SecureBoot = (val != null && Convert.ToInt32(val) == 1) ? "Enabled (Active)" : "Disabled";
+                    mb.SecureBoot = val == null ? "Unavailable" : (Convert.ToInt32(val) == 1 ? "Enabled (Active)" : "Disabled");
+                }
+                else
+                {
+                    mb.SecureBoot = "Not Available (Unsupported / Legacy)";
                 }
             }
-            catch { mb.SecureBoot = "Enabled (UEFI)"; }
+            catch { mb.SecureBoot = "Unknown"; }
 
             // TPM
             try
             {
                 using var tpmSearcher = new ManagementObjectSearcher(@"root\CIMV2\Security\MicrosoftTpm", "SELECT SpecVersion, IsEnabled_InitialValue, IsActivated_InitialValue FROM Win32_Tpm");
+                bool foundTpm = false;
                 foreach (var obj in tpmSearcher.Get())
                 {
-                    mb.TpmVersion = obj["SpecVersion"]?.ToString()?.Trim() ?? "2.0";
-                    mb.TpmStatus = "Enabled & Activated (Hardware Security Ready)";
+                    foundTpm = true;
+                    mb.TpmVersion = obj["SpecVersion"]?.ToString()?.Trim() ?? "Present";
+                    bool isEn = obj["IsEnabled_InitialValue"] is bool b1 && b1;
+                    bool isAct = obj["IsActivated_InitialValue"] is bool b2 && b2;
+                    mb.TpmStatus = (isEn && isAct) ? "Enabled & Activated" : "Present (Check BIOS TPM State)";
                     break;
                 }
+                if (!foundTpm)
+                {
+                    mb.TpmVersion = "None";
+                    mb.TpmStatus = "Not Detected";
+                }
             }
-            catch { mb.TpmStatus = "TPM 2.0 (Platform Security Ready)"; }
+            catch
+            {
+                mb.TpmVersion = "Unavailable";
+                mb.TpmStatus = "Unavailable (Requires Elevated Query)";
+            }
         }
 
         private void ReadWindows(DetailedWindowsInfo win)
@@ -522,19 +614,10 @@ namespace BiosOptimizer.Core.Implementations
             // Power plan
             try
             {
-                using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes");
-                if (key != null)
-                {
-                    string? guid = key.GetValue("ActivePowerScheme")?.ToString();
-                    if (!string.IsNullOrEmpty(guid))
-                    {
-                        using var sub = key.OpenSubKey(guid);
-                        string? name = sub?.GetValue("FriendlyName")?.ToString();
-                        win.PowerPlan = !string.IsNullOrEmpty(name) && !name.Contains("@") ? name : "Balanced / High Performance";
-                    }
-                }
+                var (_, planName) = BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.GetActiveSchemeNative();
+                win.PowerPlan = !string.IsNullOrWhiteSpace(planName) ? planName : "Unknown";
             }
-            catch { win.PowerPlan = "Balanced Power Scheme"; }
+            catch { win.PowerPlan = "Unknown"; }
         }
 
         private void ReadSecurity(DetailedSecurityInfo sec)
@@ -546,48 +629,82 @@ namespace BiosOptimizer.Core.Implementations
                 if (key != null)
                 {
                     var val = key.GetValue("UEFISecureBootEnabled");
-                    bool enabled = val != null && Convert.ToInt32(val) == 1;
-                    sec.SecureBootStatus = enabled ? "GOOD" : "WARNING";
-                    sec.SecureBootDetail = enabled ? "UEFI Secure Boot Active" : "Secure Boot Disabled in Firmware";
+                    if (val != null)
+                    {
+                        bool enabled = Convert.ToInt32(val) == 1;
+                        sec.SecureBootStatus = enabled ? "GOOD" : "WARNING";
+                        sec.SecureBootDetail = enabled ? "UEFI Secure Boot Active" : "Secure Boot Disabled in Firmware";
+                    }
+                    else
+                    {
+                        sec.SecureBootStatus = "UNKNOWN";
+                        sec.SecureBootDetail = "Secure Boot State Key Empty";
+                    }
+                }
+                else
+                {
+                    sec.SecureBootStatus = "INFO";
+                    sec.SecureBootDetail = "Secure Boot Unavailable / Legacy BIOS";
                 }
             }
-            catch { sec.SecureBootStatus = "GOOD"; sec.SecureBootDetail = "Secure Boot Active"; }
+            catch { sec.SecureBootStatus = "UNKNOWN"; sec.SecureBootDetail = "Unavailable (Query Failed)"; }
 
             // 2. TPM
             try
             {
-                using var searcher = new ManagementObjectSearcher(@"root\CIMV2\Security\MicrosoftTpm", "SELECT SpecVersion FROM Win32_Tpm");
+                using var searcher = new ManagementObjectSearcher(@"root\CIMV2\Security\MicrosoftTpm", "SELECT SpecVersion, IsEnabled_InitialValue, IsActivated_InitialValue FROM Win32_Tpm");
                 var res = searcher.Get();
                 if (res.Count > 0)
                 {
-                    sec.TpmStatus = "GOOD";
-                    sec.TpmDetail = "TPM 2.0 Security Module Active";
+                    string spec = "";
+                    bool en = false, act = false;
+                    foreach (var obj in res)
+                    {
+                        spec = obj["SpecVersion"]?.ToString()?.Split(',')[0]?.Trim() ?? "";
+                        en = obj["IsEnabled_InitialValue"] is bool b1 && b1;
+                        act = obj["IsActivated_InitialValue"] is bool b2 && b2;
+                        break;
+                    }
+                    sec.TpmStatus = (en && act) ? "GOOD" : "WARNING";
+                    sec.TpmDetail = string.IsNullOrWhiteSpace(spec)
+                        ? (en && act ? "TPM Active" : "TPM Present (Not Activated)")
+                        : $"TPM {spec} ({(en && act ? "Active" : "Present / Inactive")})";
                 }
                 else
                 {
-                    sec.TpmStatus = "GOOD";
-                    sec.TpmDetail = "TPM 2.0 Platform Security Ready";
+                    sec.TpmStatus = "WARNING";
+                    sec.TpmDetail = "TPM Not Detected";
                 }
             }
-            catch { sec.TpmStatus = "GOOD"; sec.TpmDetail = "TPM 2.0 Hardware Cryptography Active"; }
+            catch { sec.TpmStatus = "UNKNOWN"; sec.TpmDetail = "Unavailable (Requires Elevated Query)"; }
 
             // 3. Defender & Realtime Protection
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection");
-                var disabled = key?.GetValue("DisableRealtimeMonitoring");
-                bool isProtOn = disabled == null || Convert.ToInt32(disabled) == 0;
-                sec.RealtimeProtection = isProtOn ? "GOOD" : "WARNING";
-                sec.RealtimeDetail = isProtOn ? "Active Real-Time Antivirus Protection" : "Real-time Protection Disabled";
-                sec.DefenderStatus = "GOOD";
-                sec.DefenderDetail = "Microsoft Defender Antivirus Engine Active";
+                if (key != null)
+                {
+                    var disabled = key.GetValue("DisableRealtimeMonitoring");
+                    bool isProtOn = disabled == null || Convert.ToInt32(disabled) == 0;
+                    sec.RealtimeProtection = isProtOn ? "GOOD" : "WARNING";
+                    sec.RealtimeDetail = isProtOn ? "Active Real-Time Antivirus Protection" : "Real-time Protection Disabled";
+                    sec.DefenderStatus = "GOOD";
+                    sec.DefenderDetail = "Microsoft Defender Registry Active";
+                }
+                else
+                {
+                    sec.DefenderStatus = "UNKNOWN";
+                    sec.RealtimeProtection = "UNKNOWN";
+                    sec.DefenderDetail = "Defender Registry State Unavailable";
+                    sec.RealtimeDetail = "Unknown";
+                }
             }
             catch
             {
-                sec.DefenderStatus = "GOOD";
-                sec.RealtimeProtection = "GOOD";
-                sec.DefenderDetail = "Windows Defender Security Active";
-                sec.RealtimeDetail = "Real-time Monitoring Active";
+                sec.DefenderStatus = "UNKNOWN";
+                sec.RealtimeProtection = "UNKNOWN";
+                sec.DefenderDetail = "Unavailable";
+                sec.RealtimeDetail = "Unavailable";
             }
 
             // 4. Firewall
@@ -595,33 +712,57 @@ namespace BiosOptimizer.Core.Implementations
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile");
                 var fw = key?.GetValue("EnableFirewall");
-                bool fwOn = fw == null || Convert.ToInt32(fw) == 1;
-                sec.FirewallStatus = fwOn ? "GOOD" : "WARNING";
-                sec.FirewallDetail = fwOn ? "Windows Defender Firewall Active" : "Firewall Disabled";
+                if (fw != null)
+                {
+                    bool fwOn = Convert.ToInt32(fw) == 1;
+                    sec.FirewallStatus = fwOn ? "GOOD" : "WARNING";
+                    sec.FirewallDetail = fwOn ? "Windows Defender Firewall Active" : "Firewall Disabled";
+                }
+                else
+                {
+                    sec.FirewallStatus = "UNKNOWN";
+                    sec.FirewallDetail = "Firewall Policy State Unavailable";
+                }
             }
-            catch { sec.FirewallStatus = "GOOD"; sec.FirewallDetail = "Windows Firewall Active"; }
+            catch { sec.FirewallStatus = "UNKNOWN"; sec.FirewallDetail = "Unavailable"; }
 
             // 5. Core Isolation / Memory Integrity (HVCI)
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity");
                 var hvci = key?.GetValue("Enabled");
-                bool hvciOn = hvci != null && Convert.ToInt32(hvci) == 1;
-                sec.CoreIsolationHvci = hvciOn ? "GOOD" : "INFO";
-                sec.CoreIsolationDetail = hvciOn ? "Hypervisor-Enforced Code Integrity Active" : "Core Isolation Supported";
+                if (hvci != null)
+                {
+                    bool hvciOn = Convert.ToInt32(hvci) == 1;
+                    sec.CoreIsolationHvci = hvciOn ? "GOOD" : "INFO";
+                    sec.CoreIsolationDetail = hvciOn ? "Hypervisor-Enforced Code Integrity Active" : "Core Isolation Disabled";
+                }
+                else
+                {
+                    sec.CoreIsolationHvci = "INFO";
+                    sec.CoreIsolationDetail = "Core Isolation Not Configured";
+                }
             }
-            catch { sec.CoreIsolationHvci = "INFO"; sec.CoreIsolationDetail = "Virtualization Security Supported"; }
+            catch { sec.CoreIsolationHvci = "UNKNOWN"; sec.CoreIsolationDetail = "Unavailable"; }
 
             // 6. UAC
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System");
                 var lua = key?.GetValue("EnableLUA");
-                bool uacOn = lua == null || Convert.ToInt32(lua) == 1;
-                sec.UacStatus = uacOn ? "GOOD" : "WARNING";
-                sec.UacDetail = uacOn ? "User Account Control Enabled" : "UAC Elevation Disabled";
+                if (lua != null)
+                {
+                    bool uacOn = Convert.ToInt32(lua) == 1;
+                    sec.UacStatus = uacOn ? "GOOD" : "WARNING";
+                    sec.UacDetail = uacOn ? "User Account Control Enabled" : "UAC Elevation Disabled";
+                }
+                else
+                {
+                    sec.UacStatus = "UNKNOWN";
+                    sec.UacDetail = "UAC State Unavailable";
+                }
             }
-            catch { sec.UacStatus = "GOOD"; sec.UacDetail = "UAC Security Active"; }
+            catch { sec.UacStatus = "UNKNOWN"; sec.UacDetail = "Unavailable"; }
         }
 
         private void ReadGraphics(DetailedGraphicsDiagnostics gfx, List<DetailedGpuInfo> gpus)
@@ -630,19 +771,24 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers");
-                if (key != null)
+                var mode = key?.GetValue("HwSchMode");
+                if (mode != null)
                 {
-                    var mode = key.GetValue("HwSchMode");
-                    gfx.HagsStatus = (mode != null && Convert.ToInt32(mode) == 2) ? "Enabled (HAGS Active)" : "Supported (Disabled in Windows)";
+                    int m = Convert.ToInt32(mode);
+                    gfx.HagsStatus = m == 2 ? "Enabled (HAGS Active)" : "Disabled in Windows Graphics Settings";
+                }
+                else
+                {
+                    gfx.HagsStatus = "Default / Unsupported by Driver";
                 }
             }
-            catch { gfx.HagsStatus = "Hardware Scheduling Ready"; }
+            catch { gfx.HagsStatus = "Unavailable"; }
 
-            gfx.DirectXVersion = "DirectX 12 Ultimate";
-            gfx.WddmVersion = "WDDM 3.1";
-            gfx.FeatureLevels = "12_2, 12_1, 12_0, 11_1";
-            gfx.GpuScheduling = "Hardware Accelerated Scheduling Active";
-            gfx.HybridGraphics = gpus.Count > 1 ? "Dual GPU Hybrid Architecture Active" : "Dedicated Architecture";
+            gfx.DirectXVersion = "DirectX 12";
+            gfx.WddmVersion = gpus.FirstOrDefault()?.WddmVersion ?? "Unavailable";
+            gfx.FeatureLevels = "Hardware Dependent";
+            gfx.GpuScheduling = gfx.HagsStatus;
+            gfx.HybridGraphics = gpus.Count > 1 ? $"Multi-GPU ({gpus.Count} Adapters)" : (gpus.Count == 1 ? "Single GPU" : "Unavailable");
 
             gfx.Displays.Clear();
             try
@@ -664,18 +810,6 @@ namespace BiosOptimizer.Core.Implementations
             }
             catch { }
 
-            if (gfx.Displays.Count == 0)
-            {
-                gfx.Displays.Add(new DisplayMonitorInfo
-                {
-                    Name = "Primary Display",
-                    Resolution = "1920 x 1080",
-                    RefreshRate = "144 Hz / 60 Hz",
-                    IsPrimary = true,
-                    HdrStatus = "SDR Active"
-                });
-            }
-
             gfx.DisplayCount = gfx.Displays.Count;
         }
 
@@ -683,6 +817,9 @@ namespace BiosOptimizer.Core.Implementations
         {
             try
             {
+                var (_, activePlanName) = BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.GetActiveSchemeNative();
+                power.PowerPlan = !string.IsNullOrWhiteSpace(activePlanName) ? activePlanName : "Unknown";
+
                 using var searcher = new ManagementObjectSearcher("SELECT EstimatedChargeRemaining, BatteryStatus, DesignCapacity, FullChargeCapacity FROM Win32_Battery");
                 var res = searcher.Get();
                 if (res.Count > 0)
@@ -694,8 +831,10 @@ namespace BiosOptimizer.Core.Implementations
                     {
                         int.TryParse(obj["EstimatedChargeRemaining"]?.ToString(), out int pct);
                         int.TryParse(obj["BatteryStatus"]?.ToString(), out int status);
-                        
-                        power.BatteryPercentage = pct > 0 ? pct : 100;
+                        long.TryParse(obj["DesignCapacity"]?.ToString(), out long designCap);
+                        long.TryParse(obj["FullChargeCapacity"]?.ToString(), out long fullCap);
+
+                        power.BatteryPercentage = pct > 0 ? pct : 0;
                         power.BatteryStatus = status switch
                         {
                             1 => "Discharging (On Battery)",
@@ -703,10 +842,14 @@ namespace BiosOptimizer.Core.Implementations
                             3 => "Fully Charged",
                             4 => "Low Battery",
                             5 => "Critical Battery",
-                            _ => "AC Power Connected"
+                            _ => "Battery Present"
                         };
-                        power.AcConnected = (status == 2 || status == 3 || status == 0);
-                        power.BatteryHealth = "GOOD (Battery Health 95%+)";
+                        power.AcConnected = (status == 2 || status == 3);
+                        power.DesignCapacity = designCap > 0 ? $"{designCap} mWh" : "NOT AVAILABLE";
+                        power.FullChargeCapacity = fullCap > 0 ? $"{fullCap} mWh" : "NOT AVAILABLE";
+                        power.BatteryHealth = (designCap > 0 && fullCap > 0)
+                            ? $"{Math.Min(100, Math.Round((fullCap * 100.0) / designCap, 1)):F1}% of Design Capacity"
+                            : "Capacity Telemetry Unavailable";
                         break;
                     }
                 }
@@ -715,15 +858,17 @@ namespace BiosOptimizer.Core.Implementations
                     power.IsLaptop = false;
                     power.HasBattery = false;
                     power.AcConnected = true;
-                    power.BatteryStatus = "Desktop AC Continuous";
-                    power.BatteryHealth = "NOT APPLICABLE (Desktop System)";
+                    power.BatteryStatus = "Desktop / No Battery";
+                    power.BatteryHealth = "N/A (No Battery Detected)";
                 }
             }
             catch
             {
                 power.IsLaptop = false;
                 power.HasBattery = false;
-                power.AcConnected = true;
+                power.AcConnected = false;
+                power.BatteryStatus = "Unavailable";
+                power.BatteryHealth = "Unavailable";
             }
         }
 
@@ -735,6 +880,7 @@ namespace BiosOptimizer.Core.Implementations
                 var active = interfaces.FirstOrDefault(i => 
                     i.OperationalStatus == OperationalStatus.Up && 
                     i.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                    i.NetworkInterfaceType != NetworkInterfaceType.Tunnel &&
                     !i.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
                     !i.Description.Contains("Hyper-V", StringComparison.OrdinalIgnoreCase) &&
                     !i.Description.Contains("WSL", StringComparison.OrdinalIgnoreCase));
@@ -745,34 +891,43 @@ namespace BiosOptimizer.Core.Implementations
                     net.ConnectionType = active.NetworkInterfaceType switch
                     {
                         NetworkInterfaceType.Wireless80211 => "Wi-Fi (802.11 Wireless)",
-                        NetworkInterfaceType.Ethernet => "Gigabit Ethernet (Wired)",
+                        NetworkInterfaceType.Ethernet => "Ethernet (Wired)",
                         _ => active.NetworkInterfaceType.ToString()
                     };
 
-                    net.LinkSpeed = active.Speed > 0 ? $"{active.Speed / 1_000_000} Mbps" : "Auto-Negotiated";
+                    net.LinkSpeed = active.Speed > 0 ? $"{active.Speed / 1_000_000} Mbps" : "Unavailable";
 
                     var ipProps = active.GetIPProperties();
                     var ipv4 = ipProps.UnicastAddresses.FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork);
-                    net.Ipv4Address = ipv4?.Address.ToString() ?? "192.168.1.X";
+                    net.Ipv4Address = ipv4?.Address.ToString() ?? "Unavailable";
 
-                    var gw = ipProps.GatewayAddresses.FirstOrDefault();
-                    net.Gateway = gw?.Address.ToString() ?? "192.168.1.1";
+                    var gw = ipProps.GatewayAddresses.FirstOrDefault(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
+                    net.Gateway = gw?.Address.ToString() ?? "Unavailable";
 
                     var dnsList = ipProps.DnsAddresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).Select(a => a.ToString()).ToList();
-                    net.Dns = dnsList.Count > 0 ? string.Join(", ", dnsList.Take(2)) : "Automatic (Router DNS)";
-                    net.Status = "Connected (Internet Online)";
+                    net.Dns = dnsList.Count > 0 ? string.Join(", ", dnsList.Take(2)) : "Automatic (DHCP)";
+                    net.Status = "Connected";
                 }
                 else
                 {
-                    net.ActiveAdapterName = "Network Adapter";
-                    net.ConnectionType = "Ethernet / Wi-Fi";
-                    net.Status = "Connected";
+                    net.ActiveAdapterName = "No Active Network Adapter";
+                    net.ConnectionType = "Disconnected";
+                    net.LinkSpeed = "Unavailable";
+                    net.Ipv4Address = "Unavailable";
+                    net.Gateway = "Unavailable";
+                    net.Dns = "Unavailable";
+                    net.Status = "Disconnected";
                 }
             }
             catch
             {
-                net.ActiveAdapterName = "Active Adapter";
-                net.Status = "Online";
+                net.ActiveAdapterName = "Unavailable";
+                net.ConnectionType = "Unavailable";
+                net.LinkSpeed = "Unavailable";
+                net.Ipv4Address = "Unavailable";
+                net.Gateway = "Unavailable";
+                net.Dns = "Unavailable";
+                net.Status = "Unavailable";
             }
         }
 

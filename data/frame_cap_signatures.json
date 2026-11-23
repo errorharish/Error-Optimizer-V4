@@ -1,0 +1,38 @@
+{
+  "signatures": [
+    {
+      "emulator": "MSIAppPlayer5",
+      "version_range": "5.9.0-5.13.99",
+      "pattern_hex": "B8 3C 00 00 00 89 80",
+      "wildcard_mask": "FF FF FF FF FF FF 00",
+      "patch_hex": "B8 E8 03 00 00",
+      "description": "mov eax,60 -> mov eax,1000"
+    },
+    {
+      "emulator": "MSIAppPlayer5",
+      "version_range": "5.10.0-5.13.99",
+      "pattern_hex": "B8 F0 00 00 00 89 8?",
+      "wildcard_mask": "FF FF FF FF FF FF 00",
+      "patch_hex": "B8 E8 03 00 00",
+      "description": "mov eax,240 -> mov eax,1000"
+    },
+    {
+      "emulator": "MSIAppPlayer5",
+      "version_range": "5.22.0-5.22.999",
+      "pattern_hex": "41 B8 F0 00 00 00 48 8D 4C 24 78",
+      "wildcard_mask": "FF FF FF FF FF FF FF FF FF FF FF",
+      "patch_hex": "41 B8 E8 03 00 00",
+      "patch_offset": 0,
+      "description": "mov r8d,240 -> mov r8d,1000 (MSI App Player 5.22 branch)"
+    },
+    {
+      "emulator": "MSIAppPlayer5",
+      "version_range": "5.22.0-5.22.999",
+      "pattern_hex": "B8 F0 00 00 00",
+      "wildcard_mask": "FF FF FF FF FF",
+      "patch_hex": "B8 E8 03 00 00",
+      "patch_offset": 0,
+      "description": "mov eax,240 -> mov eax,1000"
+    }
+  ]
+}

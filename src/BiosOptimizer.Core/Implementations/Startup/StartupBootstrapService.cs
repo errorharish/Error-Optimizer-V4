@@ -132,23 +132,8 @@ namespace BiosOptimizer.Core.Implementations.Startup
                 AddLog($"PHASE 7A: AI Workload Engine initialization failed: {ex.Message}");
             }
 
-            // 7B: RAM Limiter Engine
-            try
-            {
-                var ramEngine = RamLimiterEngine.Instance;
-                if (ramEngine.Config.IsEnabled)
-                {
-                    ramEngine.Start();
-                }
-                report.AiRamState = ramEngine.Config.IsEnabled ? "RUNNING" : "DISABLED";
-                AddLog($"PHASE 7B: AI RAM Limiter Engine initialized (Enabled={ramEngine.Config.IsEnabled}, Mode={ramEngine.Config.NormalMode}). Passive monitoring active.");
-            }
-            catch (Exception ex)
-            {
-                report.AiRamState = "FAILED";
-                anyEngineFailed = true;
-                AddLog($"PHASE 7B: AI RAM Limiter Engine initialization failed: {ex.Message}");
-            }
+            // 7B: RAM Limiter Engine - DECOMMISSIONED
+            report.AiRamState = "DISABLED";
 
             // 7C: Power Plan Engine
             try

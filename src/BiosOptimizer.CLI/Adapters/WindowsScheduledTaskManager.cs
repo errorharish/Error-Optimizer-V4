@@ -62,32 +62,82 @@ public class WindowsScheduledTaskManager : IScheduledTaskManager
         return TaskState.Unknown;
     }
 
+    public string? LastError { get; private set; }
+
     public bool Enable(string taskPath)
     {
+        LastError = null;
         try
         {
             var task = GetTask(taskPath);
-            if (task == null) return false;
+            if (task == null)
+            {
+                LastError = $"Scheduled task '{taskPath}' not found.";
+                return false;
+            }
             task.Enabled = true;
             return true;
         }
-        catch
+        catch (System.Runtime.InteropServices.COMException comEx)
         {
+            uint hr = (uint)comEx.ErrorCode;
+            if (hr == 0x80070005)
+            {
+                LastError = $"Access Denied: Administrator privileges required to enable scheduled task '{taskPath}'.";
+            }
+            else
+            {
+                LastError = $"COM error (0x{hr:X8}) enabling scheduled task '{taskPath}': {comEx.Message}";
+            }
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            LastError = $"Access Denied: Administrator privileges required to enable scheduled task '{taskPath}'.";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Failed to enable scheduled task '{taskPath}': {ex.Message}";
             return false;
         }
     }
 
     public bool Disable(string taskPath)
     {
+        LastError = null;
         try
         {
             var task = GetTask(taskPath);
-            if (task == null) return false;
+            if (task == null)
+            {
+                LastError = $"Scheduled task '{taskPath}' not found.";
+                return false;
+            }
             task.Enabled = false;
             return true;
         }
-        catch
+        catch (System.Runtime.InteropServices.COMException comEx)
         {
+            uint hr = (uint)comEx.ErrorCode;
+            if (hr == 0x80070005)
+            {
+                LastError = $"Access Denied: Administrator privileges required to disable scheduled task '{taskPath}'.";
+            }
+            else
+            {
+                LastError = $"COM error (0x{hr:X8}) disabling scheduled task '{taskPath}': {comEx.Message}";
+            }
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            LastError = $"Access Denied: Administrator privileges required to disable scheduled task '{taskPath}'.";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Failed to disable scheduled task '{taskPath}': {ex.Message}";
             return false;
         }
     }

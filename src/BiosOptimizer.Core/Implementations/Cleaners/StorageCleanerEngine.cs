@@ -65,7 +65,7 @@ namespace BiosOptimizer.Core.Implementations.Cleaners
             string memoryDmp = Path.Combine(winDir, "MEMORY.DMP");
             if (File.Exists(memoryDmp))
             {
-                AddNormalizedPath(dumpPaths, winDir); // Handled safely by IsLikelySafeToCount
+                AddNormalizedPath(dumpPaths, memoryDmp);
             }
 
             foreach (var userProfile in userProfiles)
@@ -1135,14 +1135,14 @@ namespace BiosOptimizer.Core.Implementations.Cleaners
             {
                 try
                 {
-                    if (!File.Exists(path))
+                    if (!SecureStoragePathValidator.ValidateForDeletion(path, out string canonicalPath, out string failureReason))
                     {
                         result.SkippedCount++;
-                        result.FailedFiles.Add($"{path}: File does not exist on disk");
+                        result.FailedFiles.Add($"{path}: Validation blocked — {failureReason}");
                         continue;
                     }
 
-                    var fi = new FileInfo(path);
+                    var fi = new FileInfo(canonicalPath);
                     long size = fi.Length;
                     if ((fi.Attributes & FileAttributes.ReadOnly) != 0)
                     {
@@ -1152,17 +1152,17 @@ namespace BiosOptimizer.Core.Implementations.Cleaners
                     if (moveToRecycleBin)
                     {
                         Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
-                            path,
+                            canonicalPath,
                             Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
                             Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                     }
                     else
                     {
-                        File.Delete(path);
+                        File.Delete(canonicalPath);
                     }
 
                     // Post-deletion existence check
-                    if (!File.Exists(path))
+                    if (!File.Exists(canonicalPath))
                     {
                         result.DeletedCount++;
                         result.ReclaimedBytes += size;
@@ -1170,7 +1170,7 @@ namespace BiosOptimizer.Core.Implementations.Cleaners
                     else
                     {
                         result.SkippedCount++;
-                        result.FailedFiles.Add($"{path}: File in use or locked by another process");
+                        result.FailedFiles.Add($"{canonicalPath}: File in use or locked by another process");
                     }
                 }
                 catch (UnauthorizedAccessException ex)

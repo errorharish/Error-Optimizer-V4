@@ -126,61 +126,127 @@ namespace BiosOptimizer.Core.Implementations.Input
                 }
 
                 var list = new List<InputDeviceInfo>();
-                uint numDevices = 0;
-                uint structSize = (uint)Marshal.SizeOf(typeof(RAWINPUTDEVICELIST));
 
-                GetRawInputDeviceList(IntPtr.Zero, ref numDevices, structSize);
-
-                if (numDevices > 0)
+                try
                 {
-                    IntPtr pList = Marshal.AllocHGlobal((int)(structSize * numDevices));
-                    try
+                    var summary = InputDeviceResolver.ResolveConnectedDevices();
+                    
+                    // Add distinct physical mice
+                    foreach (var m in summary.PhysicalMice)
                     {
-                        if (GetRawInputDeviceList(pList, ref numDevices, structSize) != uint.MaxValue)
+                        list.Add(new InputDeviceInfo
                         {
-                            for (int i = 0; i < numDevices; i++)
-                            {
-                                var dev = (RAWINPUTDEVICELIST)Marshal.PtrToStructure(
-                                    new IntPtr(pList.ToInt64() + (i * structSize)), typeof(RAWINPUTDEVICELIST))!;
+                            DeviceType = InputDeviceType.Mouse,
+                            Name = m.DeviceName,
+                            Vendor = m.Manufacturer,
+                            Product = m.DeviceName,
+                            Vid = m.Vid,
+                            Pid = m.Pid,
+                            DevicePath = m.RawDevicePath,
+                            IsConnected = true,
+                            IsWireless = m.TransportType.Contains("Wireless") || m.TransportType.Contains("Bluetooth"),
+                            Capabilities = m.TransportType
+                        });
+                    }
 
-                                uint nameSize = 0;
-                                GetRawInputDeviceInfo(dev.hDevice, RIDI_DEVICENAME, IntPtr.Zero, ref nameSize);
-                                string path = string.Empty;
-                                if (nameSize > 0)
+                    // Add distinct touchpads
+                    foreach (var t in summary.Touchpads)
+                    {
+                        list.Add(new InputDeviceInfo
+                        {
+                            DeviceType = InputDeviceType.Touchpad,
+                            Name = t.DeviceName,
+                            Vendor = t.Manufacturer,
+                            Product = t.DeviceName,
+                            Vid = t.Vid,
+                            Pid = t.Pid,
+                            DevicePath = t.RawDevicePath,
+                            IsConnected = true,
+                            IsWireless = false,
+                            Capabilities = t.TransportType
+                        });
+                    }
+
+                    // Add distinct physical keyboards
+                    foreach (var k in summary.PhysicalKeyboards)
+                    {
+                        list.Add(new InputDeviceInfo
+                        {
+                            DeviceType = InputDeviceType.Keyboard,
+                            Name = k.DeviceName,
+                            Vendor = k.Manufacturer,
+                            Product = k.DeviceName,
+                            Vid = k.Vid,
+                            Pid = k.Pid,
+                            DevicePath = k.RawDevicePath,
+                            IsConnected = true,
+                            IsWireless = k.TransportType.Contains("Wireless") || k.TransportType.Contains("Bluetooth"),
+                            Capabilities = k.TransportType
+                        });
+                    }
+                }
+                catch
+                {
+                }
+
+                if (list.Count == 0)
+                {
+                    uint numDevices = 0;
+                    uint structSize = (uint)Marshal.SizeOf(typeof(RAWINPUTDEVICELIST));
+
+                    GetRawInputDeviceList(IntPtr.Zero, ref numDevices, structSize);
+
+                    if (numDevices > 0)
+                    {
+                        IntPtr pList = Marshal.AllocHGlobal((int)(structSize * numDevices));
+                        try
+                        {
+                            if (GetRawInputDeviceList(pList, ref numDevices, structSize) != uint.MaxValue)
+                            {
+                                for (int i = 0; i < numDevices; i++)
                                 {
-                                    IntPtr pName = Marshal.AllocHGlobal((int)(nameSize * 2));
-                                    try
+                                    var dev = (RAWINPUTDEVICELIST)Marshal.PtrToStructure(
+                                        new IntPtr(pList.ToInt64() + (i * structSize)), typeof(RAWINPUTDEVICELIST))!;
+
+                                    uint nameSize = 0;
+                                    GetRawInputDeviceInfo(dev.hDevice, RIDI_DEVICENAME, IntPtr.Zero, ref nameSize);
+                                    string path = string.Empty;
+                                    if (nameSize > 0)
                                     {
-                                        if (GetRawInputDeviceInfo(dev.hDevice, RIDI_DEVICENAME, pName, ref nameSize) != uint.MaxValue)
+                                        IntPtr pName = Marshal.AllocHGlobal((int)(nameSize * 2));
+                                        try
                                         {
-                                            path = Marshal.PtrToStringAuto(pName) ?? string.Empty;
+                                            if (GetRawInputDeviceInfo(dev.hDevice, RIDI_DEVICENAME, pName, ref nameSize) != uint.MaxValue)
+                                            {
+                                                path = Marshal.PtrToStringAuto(pName) ?? string.Empty;
+                                            }
+                                        }
+                                        finally
+                                        {
+                                            Marshal.FreeHGlobal(pName);
                                         }
                                     }
-                                    finally
-                                    {
-                                        Marshal.FreeHGlobal(pName);
-                                    }
-                                }
 
-                                var info = ParseDeviceInfo(dev.dwType, path);
-                                if (info != null && !list.Any(d => d.DevicePath.Equals(info.DevicePath, StringComparison.OrdinalIgnoreCase)))
-                                {
-                                    list.Add(info);
+                                    var info = ParseDeviceInfo(dev.dwType, path);
+                                    if (info != null && !list.Any(d => d.DevicePath.Equals(info.DevicePath, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        list.Add(info);
+                                    }
                                 }
                             }
                         }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(pList);
+                        }
                     }
-                    finally
-                    {
-                        Marshal.FreeHGlobal(pList);
-                    }
-                }
 
-                // Check Touchpad
-                var touchpad = DetectTouchpad(list);
-                if (touchpad != null && !list.Any(d => d.DeviceType == InputDeviceType.Touchpad))
-                {
-                    list.Add(touchpad);
+                    // Check Touchpad
+                    var touchpad = DetectTouchpad(list);
+                    if (touchpad != null && !list.Any(d => d.DeviceType == InputDeviceType.Touchpad))
+                    {
+                        list.Add(touchpad);
+                    }
                 }
 
                 // Check Gamepads via XInput

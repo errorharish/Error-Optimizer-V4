@@ -1,0 +1,53 @@
+{
+  "os": "Windows 10",
+  "reducibleProcesses": [
+    {
+      "name": "SearchUI.exe",
+      "category": "Cortana",
+      "reason": "Legacy Cortana background process",
+      "tier": 1
+    },
+    {
+      "name": "YourPhone.exe",
+      "category": "Phone Link",
+      "reason": "Phone link companion background sync",
+      "tier": 1
+    },
+    {
+      "name": "GameBar.exe",
+      "category": "Xbox",
+      "reason": "Background Xbox Game Bar overlay host when not gaming",
+      "tier": 1
+    },
+    {
+      "name": "GameBarFTServer.exe",
+      "category": "Xbox",
+      "reason": "Xbox Game Bar file transfer server",
+      "tier": 1
+    },
+    {
+      "name": "XboxGamingOverlay.exe",
+      "category": "Xbox",
+      "reason": "Xbox background overlay idle host",
+      "tier": 1
+    },
+    {
+      "name": "People.exe",
+      "category": "Contacts",
+      "reason": "Windows People contact synchronization host",
+      "tier": 2
+    },
+    {
+      "name": "SkypeBackgroundHost.exe",
+      "category": "Messaging",
+      "reason": "Skype background updater and idle sync",
+      "tier": 2
+    },
+    {
+      "name": "SkypeApp.exe",
+      "category": "Messaging",
+      "reason": "Skype UWP background process",
+      "tier": 2
+    }
+  ]
+}

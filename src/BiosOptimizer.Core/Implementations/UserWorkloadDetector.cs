@@ -192,28 +192,36 @@ namespace BiosOptimizer.Core.Implementations
             var hwProfile = HardwareProfiler.GetQuickProfile(forceRefresh: false);
             result.RamUsagePercent = hwProfile.RamUsagePercent;
 
-            // 1. Check Foreground Window & Process
-            IntPtr fgHwnd = GetForegroundWindow();
-            uint fgPid = 0;
-            string fgProcessName = string.Empty;
+            // 1. Check Foreground Window & Process via InteractiveSessionBridge first
+            var bridgeState = InteractiveSessionBridge.GetActiveSessionState();
+            uint fgPid = bridgeState?.ForegroundProcessId ?? 0;
+            string fgProcessName = bridgeState?.ProcessName ?? string.Empty;
+            bool isFullscreen = bridgeState?.IsFullscreen ?? false;
 
-            if (fgHwnd != IntPtr.Zero)
+            if (fgPid == 0 && Process.GetCurrentProcess().SessionId > 0)
             {
-                GetWindowThreadProcessId(fgHwnd, out fgPid);
-                if (fgPid > 0)
+                IntPtr fgHwnd = GetForegroundWindow();
+                if (fgHwnd != IntPtr.Zero)
                 {
-                    try
+                    GetWindowThreadProcessId(fgHwnd, out fgPid);
+                    if (fgPid > 0)
                     {
-                        using var proc = Process.GetProcessById((int)fgPid);
-                        fgProcessName = proc.ProcessName;
-                        result.PrimaryProcessName = fgProcessName;
-                        result.PrimaryPid = (int)fgPid;
+                        try
+                        {
+                            using var proc = Process.GetProcessById((int)fgPid);
+                            fgProcessName = proc.ProcessName;
+                        }
+                        catch { }
                     }
-                    catch { }
+                    isFullscreen = IsWindowFullscreen(fgHwnd);
                 }
+            }
 
-                // Check Fullscreen
-                result.IsFullscreen = IsWindowFullscreen(fgHwnd);
+            if (fgPid > 0)
+            {
+                result.PrimaryPid = (int)fgPid;
+                result.PrimaryProcessName = fgProcessName;
+                result.IsFullscreen = isFullscreen;
             }
 
             // 2. Classify by Category and Confidence

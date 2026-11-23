@@ -104,8 +104,9 @@ namespace BiosOptimizer.Core.Implementations.Power
                 }
                 catch { }
 
-                // 5. Thermal Assessment (Only real exposed metrics)
+                // 5. Thermal & Modern Standby Assessment
                 report.ThermalStatus = "NORMAL (Within OEM Thermal Limits)";
+                report.IsModernStandby = IsModernStandbyPlatform();
 
                 // 6. Dynamic Metrics & Classification
                 UpdateDynamicMetrics(report);
@@ -125,6 +126,21 @@ namespace BiosOptimizer.Core.Implementations.Power
 
             var (isBusy, workloadReason) = UserWorkloadDetector.EvaluateCurrentWorkload();
             report.DetectedWorkload = string.IsNullOrEmpty(workloadReason) ? "Standard Multi-tasking" : workloadReason;
+        }
+
+        public static bool IsModernStandbyPlatform()
+        {
+            try
+            {
+                using var powerKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Power");
+                if (powerKey != null)
+                {
+                    var aoac = powerKey.GetValue("PlatformAoAc");
+                    if (aoac is int val && val == 1) return true;
+                }
+            }
+            catch { }
+            return false;
         }
 
         public string Classify(HardwareAnalysisReport report)
@@ -155,91 +171,62 @@ namespace BiosOptimizer.Core.Implementations.Power
             // Case 1: Battery Critical (<= 25%)
             if (report.IsBatteryPowered && report.BatteryPercent <= 25)
             {
+                var aiBat = installedPlans.FirstOrDefault(p => p.IsAiBatteryEfficiency && p.IsInstalled && p.IsSupported);
                 var saver = installedPlans.FirstOrDefault(p => p.Guid.Equals(PowerPlanEngine.PowerSaverGuid, StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
-                rec.RecommendedPlanName = saver?.Name ?? "Balanced";
-                rec.RecommendedPlanGuid = saver?.Guid ?? PowerPlanEngine.BalancedGuid;
+                rec.RecommendedPlanName = aiBat?.Name ?? saver?.Name ?? "Balanced";
+                rec.RecommendedPlanGuid = aiBat?.Guid ?? saver?.Guid ?? PowerPlanEngine.BalancedGuid;
                 rec.Reason = $"Battery is at {report.BatteryPercent}%. Preserves remaining capacity and avoids shutdown.";
                 rec.BatteryWarning = "CRITICAL BATTERY: Energy preservation active.";
-                rec.IsCurrentActiveOptimal = activePlan?.Guid == rec.RecommendedPlanGuid;
+                rec.IsCurrentActiveOptimal = (activePlan?.Guid == rec.RecommendedPlanGuid) || (activePlan != null && activePlan.Name.Equals(rec.RecommendedPlanName, StringComparison.OrdinalIgnoreCase));
                 return rec;
             }
 
             // Case 2: Laptop on Battery
             if (report.IsBatteryPowered)
             {
-                rec.RecommendedPlanName = "Balanced";
-                rec.RecommendedPlanGuid = PowerPlanEngine.BalancedGuid;
-                rec.Reason = "Operating on DC Battery power. Balanced mode maintains battery longevity and avoids thermal throttling.";
-                rec.BatteryWarning = "BATTERY ACTIVE: High performance plans cause rapid drain.";
-                rec.IsCurrentActiveOptimal = activePlan?.Guid == rec.RecommendedPlanGuid;
+                var aiBat = installedPlans.FirstOrDefault(p => p.IsAiBatteryEfficiency && p.IsInstalled && p.IsSupported);
+                rec.RecommendedPlanName = aiBat?.Name ?? "Balanced";
+                rec.RecommendedPlanGuid = aiBat?.Guid ?? PowerPlanEngine.BalancedGuid;
+                rec.Reason = aiBat != null
+                    ? "Operating on DC Battery power. Error Optimizer AI — Battery Efficiency caps boost spikes and maximizes battery runtime."
+                    : "Operating on DC Battery power. Balanced mode maintains battery longevity and avoids thermal throttling.";
+                rec.BatteryWarning = "BATTERY ACTIVE: Operating on DC power.";
+                rec.IsCurrentActiveOptimal = (activePlan?.Guid == rec.RecommendedPlanGuid) || (activePlan != null && activePlan.Name.Equals(rec.RecommendedPlanName, StringComparison.OrdinalIgnoreCase));
                 return rec;
             }
 
-            // Case 3: Heavy Gaming / Rendering / Video Workload on AC Power
-            if (report.DetectedWorkload.Contains("Heavy", StringComparison.OrdinalIgnoreCase) || 
-                report.DetectedWorkload.Contains("Gaming", StringComparison.OrdinalIgnoreCase) || 
-                report.DetectedWorkload.Contains("Pressure", StringComparison.OrdinalIgnoreCase))
+            // Case 3: AC Power (Normal, High Performance, or Gaming/Workload)
+            var aiMax = installedPlans.FirstOrDefault(p => p.IsAiMaxPerformance && p.IsInstalled && p.IsSupported);
+            if (aiMax != null)
             {
-                if (aiPlan != null)
-                {
-                    rec.RecommendedPlanName = aiPlan.Name;
-                    rec.RecommendedPlanGuid = aiPlan.Guid;
-                    rec.Reason = $"Heavy workload active ({report.DetectedWorkload}). Error Optimizer AI Performance locks peak CPU core boost frequencies.";
-                }
-                else
-                {
-                    var ult = installedPlans.FirstOrDefault(p => p.Name.Equals("Ultimate Performance", StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
-                    var high = installedPlans.FirstOrDefault(p => p.Name.Equals("High performance", StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
-
-                    if (ult != null)
-                    {
-                        rec.RecommendedPlanName = ult.Name;
-                        rec.RecommendedPlanGuid = ult.Guid;
-                        rec.Reason = $"Demanding workload detected ({report.DetectedWorkload}). Ultimate Performance delivers zero-latency core response.";
-                    }
-                    else if (high != null)
-                    {
-                        rec.RecommendedPlanName = high.Name;
-                        rec.RecommendedPlanGuid = high.Guid;
-                        rec.Reason = $"High performance workload ({report.DetectedWorkload}). Disables CPU idle latency penalties.";
-                    }
-                    else
-                    {
-                        rec.RecommendedPlanName = "Balanced";
-                        rec.RecommendedPlanGuid = PowerPlanEngine.BalancedGuid;
-                        rec.Reason = "AC power active. Dynamic boosting configured.";
-                    }
-                }
-
-                rec.IsCurrentActiveOptimal = activePlan?.Guid == rec.RecommendedPlanGuid;
-                return rec;
-            }
-
-            // Case 4: High Performance Desktop / Creator Rig on AC
-            if (report.TierClassification == "HIGH PERFORMANCE" && !report.IsBatteryPowered)
-            {
-                if (aiPlan != null)
-                {
-                    rec.RecommendedPlanName = aiPlan.Name;
-                    rec.RecommendedPlanGuid = aiPlan.Guid;
-                    rec.Reason = "High-tier hardware on AC. AI Plan delivers optimal core frequency calibration without unnecessary thermal stress.";
-                }
-                else
-                {
-                    var high = installedPlans.FirstOrDefault(p => p.Name.Equals("High performance", StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
-                    rec.RecommendedPlanName = high?.Name ?? "Balanced";
-                    rec.RecommendedPlanGuid = high?.Guid ?? PowerPlanEngine.BalancedGuid;
-                    rec.Reason = "Desktop AC power connected. High Performance provides responsive burst frequency.";
-                }
+                rec.RecommendedPlanName = aiMax.Name;
+                rec.RecommendedPlanGuid = aiMax.Guid;
+                rec.Reason = $"AC power active on {report.CpuName}. Error Optimizer AI — Max Performance delivers sustained processor response and unparked cores.";
             }
             else
             {
-                rec.RecommendedPlanName = "Balanced";
-                rec.RecommendedPlanGuid = PowerPlanEngine.BalancedGuid;
-                rec.Reason = "AC power connected. Balanced provides ideal hardware power efficiency and boost clock scaling.";
+                var ult = installedPlans.FirstOrDefault(p => p.Name.Equals("Ultimate Performance", StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
+                var high = installedPlans.FirstOrDefault(p => p.Name.Equals("High performance", StringComparison.OrdinalIgnoreCase) && p.IsInstalled);
+                if (ult != null)
+                {
+                    rec.RecommendedPlanName = ult.Name;
+                    rec.RecommendedPlanGuid = ult.Guid;
+                    rec.Reason = $"AC power active. Ultimate Performance delivers zero-latency core response.";
+                }
+                else if (high != null)
+                {
+                    rec.RecommendedPlanName = high.Name;
+                    rec.RecommendedPlanGuid = high.Guid;
+                    rec.Reason = "AC power active. High performance profile eliminates processor downclock latency.";
+                }
+                else
+                {
+                    rec.RecommendedPlanName = "Balanced";
+                    rec.RecommendedPlanGuid = PowerPlanEngine.BalancedGuid;
+                    rec.Reason = "Standard balanced dynamic scaling.";
+                }
             }
-
-            rec.IsCurrentActiveOptimal = activePlan?.Guid == rec.RecommendedPlanGuid;
+            rec.IsCurrentActiveOptimal = (activePlan?.Guid == rec.RecommendedPlanGuid) || (activePlan != null && activePlan.Name.Equals(rec.RecommendedPlanName, StringComparison.OrdinalIgnoreCase));
             return rec;
         }
     }

@@ -225,7 +225,7 @@ namespace BiosOptimizer.GUI.ViewModels
                 {
                     return RestartRequiredCount > 0 
                         ? $"{verifiedTotal}/{ApplicableCount} (RESTART REQUIRED)"
-                        : "100% OPTIMIZED";
+                        : "CONFIGURATION VERIFIED";
                 }
                 if (RestartRequiredCount > 0)
                 {
@@ -243,14 +243,14 @@ namespace BiosOptimizer.GUI.ViewModels
                 if (IsBusy) return "OPTIMIZING...";
                 if (IsNormalMode)
                 {
-                    if (IsFullyOptimized) return "⚡ REGISTRY 100% OPTIMIZED";
+                    if (IsFullyOptimized) return "⚡ ALREADY OPTIMIZED — NO CHANGES NEEDED";
                     if (RestartRequiredCount > 0 && RecommendedCount == 0) return "⚡ REGISTRY (REBOOT PENDING)";
                     if (ApplicableCount == 0) return "NO APPLICABLE TARGETS";
                     return "⚡ FULL OPTIMIZATION";
                 }
                 else
                 {
-                    if (SelectedCount == 0) return IsFullyOptimized ? "⚡ REGISTRY 100% OPTIMIZED" : "NO OPTIMIZATIONS SELECTED";
+                    if (SelectedCount == 0) return IsFullyOptimized ? "⚡ ALREADY OPTIMIZED — NO CHANGES NEEDED" : "NO OPTIMIZATIONS SELECTED";
                     return $"⚡ CUSTOM OPTIMIZATION ({SelectedCount} SELECTED)";
                 }
             }
@@ -809,11 +809,11 @@ namespace BiosOptimizer.GUI.ViewModels
                 int verifiedTotal = AlreadyOptimizedCount + RestartRequiredCount;
                 string vStatus = (RestartRequiredCount > 0)
                     ? $"{verifiedTotal}/{ApplicableCount} Verified ({RestartRequiredCount} Restart Required)"
-                    : "100% APPLICABLE OPTIMIZATIONS VERIFIED";
+                    : "ALL APPLICABLE OPTIMIZATIONS VERIFIED";
 
                 tracker.CompleteAdvanced(
                     profileName: IsNormalMode ? "REGISTRY OPTIMIZATION (NORMAL MODE)" : "REGISTRY OPTIMIZATION (CUSTOM MODE)",
-                    summaryMessage: "100% APPLICABLE OPTIMIZATIONS VERIFIED — All supported registry targets are optimal.",
+                    summaryMessage: "ALREADY OPTIMIZED — NO CHANGES NEEDED: All supported registry targets are optimal.",
                     appliedCount: 0,
                     verifiedCount: verifiedTotal,
                     alreadyOptimizedCount: AlreadyOptimizedCount,
@@ -892,11 +892,11 @@ namespace BiosOptimizer.GUI.ViewModels
                 {
                     string vStatus = RestartRequiredCount > 0
                         ? $"{totalApplicableVerified}/{ApplicableCount} Verified ({RestartRequiredCount} Restart Required)"
-                        : "100% APPLICABLE OPTIMIZATIONS VERIFIED";
+                        : "ALL APPLICABLE OPTIMIZATIONS VERIFIED";
 
                     opTracker.CompleteAdvanced(
                         profileName: IsNormalMode ? "REGISTRY OPTIMIZATION (NORMAL MODE)" : "CUSTOM REGISTRY OPTIMIZATION",
-                        summaryMessage: $"100% APPLICABLE OPTIMIZATION SUCCESS — {totalNewlySuccessful} applied & verified, {AlreadyOptimizedCount} already optimal, 0 failed.",
+                        summaryMessage: $"REGISTRY OPTIMIZATION APPLIED & VERIFIED — {totalNewlySuccessful} applied & verified, {AlreadyOptimizedCount} already optimal, 0 failed.",
                         appliedCount: totalNewlySuccessful,
                         verifiedCount: totalApplicableVerified,
                         alreadyOptimizedCount: AlreadyOptimizedCount,

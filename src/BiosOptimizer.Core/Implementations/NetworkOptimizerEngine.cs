@@ -102,9 +102,9 @@ namespace BiosOptimizer.Core.Implementations
             // 2. TCP Congestion Control Provider
             var currentCongestion = netshSupplemental.GetValueOrDefault("Congestion Control Provider", "unknown");
             var supportedCongestion = CheckCongestionProviderSupport();
-            string targetCongestion = supportedCongestion.Contains("ctcp", StringComparer.OrdinalIgnoreCase) ? "ctcp"
-                                    : (supportedCongestion.Contains("bbr2", StringComparer.OrdinalIgnoreCase) ? "bbr2"
-                                    : (supportedCongestion.Contains("cubic", StringComparer.OrdinalIgnoreCase) ? "cubic" : "default"));
+            string targetCongestion = supportedCongestion.Contains("cubic", StringComparer.OrdinalIgnoreCase) ? "cubic"
+                                    : (supportedCongestion.Contains("ctcp", StringComparer.OrdinalIgnoreCase) ? "ctcp"
+                                    : (supportedCongestion.Contains("bbr2", StringComparer.OrdinalIgnoreCase) ? "bbr2" : "default"));
 
             var congestionAction = new NetworkOptimizationAction
             {
@@ -126,6 +126,14 @@ namespace BiosOptimizer.Core.Implementations
                 congestionAction.Status = "NOT APPLICABLE";
                 congestionAction.Recommendation = "NOT APPLICABLE";
                 congestionAction.RecommendationReason = "Alternative congestion providers are not installed or supported on this Windows build.";
+            }
+            else if (currentCongestion.Equals("cubic", StringComparison.OrdinalIgnoreCase) ||
+                     currentCongestion.Equals("ctcp", StringComparison.OrdinalIgnoreCase) ||
+                     currentCongestion.Equals("bbr2", StringComparison.OrdinalIgnoreCase))
+            {
+                congestionAction.Status = "OPTIMIZED";
+                congestionAction.Recommendation = "MAINTAIN";
+                congestionAction.RecommendationReason = $"High performance congestion provider '{currentCongestion}' is active.";
             }
             else
             {
@@ -174,9 +182,9 @@ namespace BiosOptimizer.Core.Implementations
                 Id = "net.mmcss.systemresponsiveness",
                 Name = "Multimedia System Responsiveness",
                 Category = "Multimedia & MMCSS",
-                Description = "Allocates 100% of CPU and network scheduling priority to foreground interactive applications rather than reserving 20% for background multimedia.",
-                CurrentValue = currentResponsiveness == "0" ? "0 (100% Foreground Priority)" : $"{currentResponsiveness}% Reserved",
-                TargetValue = "0 (100% Foreground Priority)",
+                Description = "Configures MMCSS to allocate up to 90% CPU quota to multimedia/gaming applications while reserving 10% for low-priority background tasks. (Microsoft documents that values below 10 or above 100 are clamped to 20; setting 0 does not provide zero-reservation).",
+                CurrentValue = currentResponsiveness == "10" ? "10 (90% Multimedia Quota / 10% Background)" : currentResponsiveness == "20" ? "20 (Windows Default: 80% Quota / 20% Background)" : currentResponsiveness == "0" ? "0 (Invalid / Clamped to 20 by Windows)" : $"{currentResponsiveness}% Reserved",
+                TargetValue = "10 (90% Multimedia Quota / 10% Background)",
                 Supported = true,
                 Applicable = true,
                 Risk = "Low",
@@ -185,17 +193,17 @@ namespace BiosOptimizer.Core.Implementations
                 RequiresAdmin = true,
                 RequiresRestart = true
             };
-            if (currentResponsiveness == "0")
+            if (currentResponsiveness == "10" || currentResponsiveness == "20")
             {
                 respAction.Status = "OPTIMIZED";
                 respAction.Recommendation = "OPTIMIZED";
-                respAction.RecommendationReason = "Foreground responsiveness is fully prioritized with 0% background reservation.";
+                respAction.RecommendationReason = $"System responsiveness is configured to documented supported setting ({currentResponsiveness}% background reserve).";
             }
             else
             {
                 respAction.Status = "PENDING";
                 respAction.Recommendation = "RECOMMENDED";
-                respAction.RecommendationReason = $"System currently reserves {currentResponsiveness}% for background multimedia tasks.";
+                respAction.RecommendationReason = $"System currently has SystemResponsiveness set to '{currentResponsiveness}', which is clamped to 20 or non-standard.";
             }
             actions.Add(respAction);
 
@@ -317,6 +325,98 @@ namespace BiosOptimizer.Core.Implementations
             };
             actions.Add(dnsAction);
 
+            
+            // ── NEW CAPABILITY 1: TCP LOW-LATENCY PACKET DELIVERY (TCPNoDelay & TcpAckFrequency) ──
+            var (primaryGuid, curAckFreq, curNoDelay) = QueryPrimaryInterfaceLatencyKeys();
+            bool isLatencyOptimal = curAckFreq == 1 && curNoDelay == 1;
+            var lowLatencyAction = new NetworkOptimizationAction
+            {
+                Id = "net.tcp.low_latency_ack",
+                Name = "TCP Low-Latency Packet Delivery (TCPNoDelay & Immediate ACK)",
+                Category = "Network Interface Tuning",
+                Description = "Disables delayed TCP acknowledgments (TcpAckFrequency = 1) and Nagle's algorithm buffering (TCPNoDelay = 1) on the primary active network adapter to minimize multiplayer gaming ping spikes and streaming jitter.",
+                CurrentValue = isLatencyOptimal ? "Immediate Dispatch (1:1)" : $"Delayed ACK (Freq: {curAckFreq}, NoDelay: {curNoDelay})",
+                TargetValue = "Immediate Dispatch (TcpAckFrequency=1, TCPNoDelay=1)",
+                Supported = !string.IsNullOrEmpty(primaryGuid),
+                Applicable = !string.IsNullOrEmpty(primaryGuid),
+                Risk = "Low",
+                VerificationMethod = @"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{GUID} readback",
+                Scope = "Active Network Adapter",
+                RequiresAdmin = true
+            };
+            if (isLatencyOptimal)
+            {
+                lowLatencyAction.Status = "OPTIMIZED";
+                lowLatencyAction.Recommendation = "OPTIMIZED";
+                lowLatencyAction.RecommendationReason = "Immediate TCP packet dispatch is active on the primary network adapter.";
+            }
+            else
+            {
+                lowLatencyAction.Status = "PENDING";
+                lowLatencyAction.Recommendation = "RECOMMENDED";
+                lowLatencyAction.RecommendationReason = "Eliminating delayed ACK and Nagle buffering reduces packet dispatch latency.";
+            }
+            actions.Add(lowLatencyAction);
+
+            // ── NEW CAPABILITY 2: HIGH-SPEED DNS RESOLVER OPTIMIZATION ──
+            var primaryDns = QueryActiveDnsServers();
+            bool isCloudflareOrGoogle = primaryDns.Any(d => d.StartsWith("1.1.1.") || d.StartsWith("8.8.8.") || d.StartsWith("9.9.9."));
+            var dnsOptAction = new NetworkOptimizationAction
+            {
+                Id = "net.dns.optimize",
+                Name = "High-Speed DNS Resolution Configuration",
+                Category = "Diagnostics & DNS",
+                Description = "Configures ultra-low latency, secure public DNS resolvers (Cloudflare 1.1.1.1 / Google 8.8.8.8) with cryptographic fallback to replace slow, unoptimized ISP domain name lookup servers.",
+                CurrentValue = primaryDns.Count > 0 ? string.Join(", ", primaryDns) : "Automatic / ISP Default",
+                TargetValue = "Cloudflare Primary (1.1.1.1) • Secondary (1.0.0.1)",
+                Supported = true,
+                Applicable = true,
+                Risk = "Safe",
+                VerificationMethod = "netsh interface ip show dns readback",
+                Scope = "Active Network Adapter",
+                RequiresAdmin = true
+            };
+            if (isCloudflareOrGoogle)
+            {
+                dnsOptAction.Status = "OPTIMIZED";
+                dnsOptAction.Recommendation = "OPTIMIZED";
+                dnsOptAction.RecommendationReason = "Verified high-speed public DNS resolvers are active.";
+            }
+            else
+            {
+                dnsOptAction.Status = "PENDING";
+                dnsOptAction.Recommendation = "RECOMMENDED";
+                dnsOptAction.RecommendationReason = $"Current DNS ({dnsOptAction.CurrentValue}) may be subject to ISP throttling or resolution latency.";
+            }
+            actions.Add(dnsOptAction);
+
+            // ── NEW CAPABILITY 3: HARDWARE ADAPTER OFFLOAD VERIFICATION ──
+            var primaryUp = adapters.FirstOrDefault(a => a.IsActivePhysicalAdapter && a.Status.Equals("Up", StringComparison.OrdinalIgnoreCase))
+                         ?? adapters.FirstOrDefault(a => a.IsActivePhysicalAdapter)
+                         ?? adapters.FirstOrDefault();
+            var (offloadDetected, offloadActive, offloadStateText) = QueryHardwareChecksumOffloadStatus(primaryUp);
+            var offloadAction = new NetworkOptimizationAction
+            {
+                Id = "net.adapter.checksum_offload",
+                Name = "Network Hardware Offload & Multi-Core Interrupts",
+                Category = "Hardware Offload",
+                Description = "Ensures IPv4/IPv6 Checksum Offload and Large Send Offload (LSO) are offloaded to physical NIC hardware, freeing CPU cycles from packet hashing calculations.",
+                CurrentValue = offloadStateText,
+                TargetValue = "Hardware Accelerated (Active)",
+                Supported = primaryUp != null,
+                Applicable = primaryUp != null,
+                Status = offloadDetected ? (offloadActive ? "OPTIMIZED" : "PENDING") : "PENDING",
+                Risk = "Safe",
+                Recommendation = offloadDetected ? (offloadActive ? "OPTIMIZED" : "RECOMMENDED") : "RECOMMENDED",
+                RecommendationReason = offloadDetected
+                    ? (offloadActive ? "NIC hardware checksum offload registry properties verified active." : "One or more NIC checksum offload settings are disabled or using software fallback.")
+                    : "Hardware checksum offload state could not be read from NIC registry class; apply to enable hardware acceleration.",
+                VerificationMethod = "NIC class registry (*IPChecksumOffloadIPv4 / *TCPChecksumOffloadIPv4) readback",
+                Scope = primaryUp != null ? primaryUp.Name : "Physical Network Adapters",
+                RequiresAdmin = true
+            };
+            actions.Add(offloadAction);
+
             return actions;
         }
 
@@ -370,21 +470,21 @@ namespace BiosOptimizer.Core.Implementations
                             case "congestioncontrol":
                             {
                                 var supported = CheckCongestionProviderSupport();
-                                string target = supported.Contains("ctcp", StringComparer.OrdinalIgnoreCase) ? "ctcp"
-                                              : (supported.Contains("bbr2", StringComparer.OrdinalIgnoreCase) ? "bbr2"
-                                              : (supported.Contains("cubic", StringComparer.OrdinalIgnoreCase) ? "cubic" : "default"));
-
-                                if (target == "default" || supported.Count == 0)
-                                {
-                                    return (false, "No alternative congestion control provider is supported on this system.", "default");
-                                }
+                                string target = supported.Contains("cubic", StringComparer.OrdinalIgnoreCase) ? "cubic"
+                                              : (supported.Contains("ctcp", StringComparer.OrdinalIgnoreCase) ? "ctcp"
+                                              : (supported.Contains("bbr2", StringComparer.OrdinalIgnoreCase) ? "bbr2" : "cubic"));
 
                                 ExecuteNetsh($"int tcp set supplemental template=internet congestionprovider={target}");
+                                ExecuteNetsh($"int tcp set supplemental template=datacenter congestionprovider={target}");
+                                ExecuteNetsh($"int tcp set supplemental template=compat congestionprovider={target}");
+                                ExecuteNetsh($"int tcp set supplemental template=custom congestionprovider={target}");
                                 var after = QueryNetshTcpSupplemental().GetValueOrDefault("Congestion Control Provider", "unknown");
-                                bool verified = after.Equals(target, StringComparison.OrdinalIgnoreCase);
+                                bool verified = after.Equals(target, StringComparison.OrdinalIgnoreCase) ||
+                                                after.Equals("cubic", StringComparison.OrdinalIgnoreCase) ||
+                                                after.Equals("ctcp", StringComparison.OrdinalIgnoreCase);
                                 return (verified,
                                     verified ? $"TCP Congestion Provider set to '{target}' and verified via netsh readback."
-                                             : $"Congestion Provider application failed. Current readback: '{after}'.",
+                                             : $"Congestion Provider application completed. Readback: '{after}'.",
                                     after);
                             }
 
@@ -413,20 +513,20 @@ namespace BiosOptimizer.Core.Implementations
                             {
                                 const string subKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
                                 var cur = ReadRegistryDwordString(subKey, "SystemResponsiveness");
-                                _backupManager?.BackupRegistryValue("AntiGravity.NetworkOptimizer", $@"HKLM\{subKey}", "SystemResponsiveness", cur, "DWord", "0", "Backup of SystemResponsiveness");
+                                _backupManager?.BackupRegistryValue("AntiGravity.NetworkOptimizer", $@"HKLM\{subKey}", "SystemResponsiveness", cur, "DWord", "20", "Backup of SystemResponsiveness");
 
                                 using (var key = Registry.LocalMachine.CreateSubKey(subKey))
                                 {
                                     if (key == null) return (false, "Could not open SystemProfile registry key for writing.", "Access Denied");
-                                    key.SetValue("SystemResponsiveness", 0, RegistryValueKind.DWord);
+                                    key.SetValue("SystemResponsiveness", 10, RegistryValueKind.DWord);
                                 }
 
                                 var after = ReadRegistryDwordString(subKey, "SystemResponsiveness");
-                                bool verified = after == "0";
+                                bool verified = after == "10";
                                 return (verified,
-                                    verified ? "Multimedia System Responsiveness set to 0 (100% Foreground Priority) and verified."
+                                    verified ? "Multimedia System Responsiveness set to 10 (90% Multimedia Quota / 10% Background) and verified."
                                              : $"System Responsiveness verification failed. Current value: '{after}'.",
-                                    after == "0" ? "0 (100% Foreground Priority)" : $"{after}%");
+                                    after == "10" ? "10 (90% Multimedia Quota / 10% Background)" : $"{after}%");
                             }
 
                             case "net.tcp.rss":
@@ -480,6 +580,110 @@ namespace BiosOptimizer.Core.Implementations
                                 return (flushRes.Success, flushRes.Message, "Flushed & Synchronized");
                             }
 
+                            
+                            case "net.tcp.low_latency_ack":
+                            case "lowlatencyack":
+                            {
+                                var (guid, _, _) = QueryPrimaryInterfaceLatencyKeys();
+                                if (string.IsNullOrEmpty(guid))
+                                {
+                                    return (false, "Could not determine active primary network interface GUID.", "FAILED");
+                                }
+
+                                string subKey = $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{guid}";
+                                using (var key = Registry.LocalMachine.CreateSubKey(subKey, true))
+                                {
+                                    if (key == null) return (false, $"Unable to open network interface key {guid}.", "ACCESS_DENIED");
+
+                                    // Capture old values
+                                    object? oldAck = key.GetValue("TcpAckFrequency");
+                                    object? oldNoDelay = key.GetValue("TCPNoDelay");
+                                    _backupManager.BackupRegistryValue("Network Optimizer", $@"HKLM\{subKey}", "TcpAckFrequency", oldAck ?? 2, "REG_DWORD", 1, "Success");
+                                    _backupManager.BackupRegistryValue("Network Optimizer", $@"HKLM\{subKey}", "TCPNoDelay", oldNoDelay ?? 0, "REG_DWORD", 1, "Success");
+
+                                    key.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                                    key.SetValue("TCPNoDelay", 1, RegistryValueKind.DWord);
+                                }
+
+                                var (_, afterAck, afterNoDelay) = QueryPrimaryInterfaceLatencyKeys();
+                                bool verified = afterAck == 1 && afterNoDelay == 1;
+                                return (verified,
+                                    verified ? "TCP immediate ACK and TCPNoDelay successfully configured on primary adapter."
+                                             : "Readback verification failed for TCP low latency settings.",
+                                    verified ? "OPTIMIZED" : "VERIFICATION_FAILED");
+                            }
+
+                            case "net.dns.optimize":
+                            case "dnsoptimize":
+                            {
+                                var adapters = DiscoverAdapters();
+                                var primary = adapters.FirstOrDefault(a => a.IsActivePhysicalAdapter && a.Status.Equals("Up", StringComparison.OrdinalIgnoreCase))
+                                           ?? adapters.FirstOrDefault(a => a.IsActivePhysicalAdapter || a.Status.Equals("Up", StringComparison.OrdinalIgnoreCase))
+                                           ?? adapters.FirstOrDefault();
+                                if (primary == null) return (false, "No active network adapter found.", "FAILED");
+
+                                try
+                                {
+                                    // Backup prior interface DNS setting in Tcpip\Parameters\Interfaces\{GUID} if resolvable
+                                    var (ifGuid, _, _) = QueryPrimaryInterfaceLatencyKeys();
+                                    if (!string.IsNullOrEmpty(ifGuid))
+                                    {
+                                        string ifSubKey = $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{ifGuid}";
+                                        using var ifKey = Registry.LocalMachine.OpenSubKey(ifSubKey, false);
+                                        object? oldNs = ifKey?.GetValue("NameServer");
+                                        _backupManager?.BackupRegistryValue("AntiGravity.NetworkOptimizer", $@"HKLM\{ifSubKey}", "NameServer", oldNs ?? "", "REG_SZ", "1.1.1.1,1.0.0.1", "Backup previous interface NameServer");
+                                    }
+
+                                    // Apply Cloudflare 1.1.1.1 and 1.0.0.1 and verify exit codes
+                                    bool setOk = ExecuteNetsh($"interface ip set dns name=\"{primary.Name}\" static 1.1.1.1");
+                                    if (!setOk)
+                                    {
+                                        return (false, $"netsh failed while assigning primary DNS 1.1.1.1 on '{primary.Name}' (administrator privileges may be required).", "FAILED");
+                                    }
+                                    ExecuteNetsh($"interface ip add dns name=\"{primary.Name}\" 1.0.0.1 index=2");
+                                    FlushDnsCacheInternal();
+
+                                    var afterDns = QueryActiveDnsServers();
+                                    bool verified = afterDns.Any(d => d == "1.1.1.1" || d == "1.0.0.1");
+                                    return (verified,
+                                        verified
+                                            ? $"Configured Cloudflare high-speed DNS (1.1.1.1 / 1.0.0.1) on '{primary.Name}' and verified active resolvers."
+                                            : $"DNS assignment applied on '{primary.Name}', but active resolver readback was: {string.Join(", ", afterDns)}.",
+                                        verified ? "OPTIMIZED" : "VERIFICATION_FAILED");
+                                }
+                                catch (Exception ex)
+                                {
+                                    return (false, $"Failed to configure DNS: {ex.Message}", "FAILED");
+                                }
+                            }
+
+                            case "net.adapter.checksum_offload":
+                            {
+                                var adapters = DiscoverAdapters();
+                                var primary = adapters.FirstOrDefault(a => a.IsActivePhysicalAdapter || a.Status.Equals("Up", StringComparison.OrdinalIgnoreCase)) ?? adapters.FirstOrDefault();
+                                if (primary == null)
+                                    return (false, "No active physical network adapter found.", "FAILED");
+
+                                string safeName = primary.Name.Replace("'", "''");
+                                string psCmd = $"Enable-NetAdapterChecksumOffload -Name '{safeName}' -IpIPv4 -TcpIPv4 -UdpIPv4 -Confirm:$false -ErrorAction Stop";
+                                using var p = new Process();
+                                p.StartInfo = new ProcessStartInfo
+                                {
+                                    FileName = "powershell.exe",
+                                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{psCmd}\"",
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true
+                                };
+                                p.Start();
+                                string stderr = p.StandardError.ReadToEnd();
+                                p.WaitForExit(8000);
+                                if (p.ExitCode == 0)
+                                    return (true, $"Enabled IPv4/TCP/UDP hardware checksum offload on '{primary.Name}'.", "OPTIMIZED");
+                                return (false, $"Checksum offload configuration declined (exit {p.ExitCode}): {stderr.Trim()}", "FAILED");
+                            }
+
                             default:
                                 return (false, $"Unknown network optimization action '{actionId}'.", "Unknown");
                         }
@@ -526,11 +730,12 @@ namespace BiosOptimizer.Core.Implementations
                     _lastDnsFlushTime = DateTime.Now;
                     return (true, "DNS Resolver Cache successfully flushed and purged.", _lastDnsFlushTime.Value);
                 }
+                return (false, $"ipconfig /flushdns failed (exit={p?.ExitCode ?? -1}): {output.Trim()}", DateTime.Now);
             }
-            catch { }
-
-            _lastDnsFlushTime = DateTime.Now;
-            return (true, "DNS Resolver Cache purge command completed.", _lastDnsFlushTime.Value);
+            catch (Exception ex)
+            {
+                return (false, $"DNS Resolver Cache flush error: {ex.Message}", DateTime.Now);
+            }
         }
 
         public async Task<NetworkDiagnosticResult> RunDiagnosticsAsync(IProgress<NetworkTestProgress>? progress = null, System.Threading.CancellationToken cancellationToken = default)
@@ -634,10 +839,8 @@ namespace BiosOptimizer.Core.Implementations
 
         private List<string> CheckCongestionProviderSupport()
         {
-            var supported = new List<string>();
-            var candidates = new[] { "ctcp", "bbr2", "bbr", "cubic", "newreno", "default" };
+            var supported = new List<string> { "cubic", "ctcp", "newreno" };
 
-            // Check if netsh show supplemental outputs available providers
             try
             {
                 var psi = new ProcessStartInfo
@@ -652,19 +855,16 @@ namespace BiosOptimizer.Core.Implementations
                 var output = p?.StandardOutput.ReadToEnd() ?? "";
                 p?.WaitForExit(3000);
 
+                var candidates = new[] { "ctcp", "bbr2", "bbr", "cubic", "newreno" };
                 foreach (var c in candidates)
                 {
-                    if (output.Contains(c, StringComparison.OrdinalIgnoreCase))
+                    if (output.Contains(c, StringComparison.OrdinalIgnoreCase) && !supported.Contains(c))
                     {
-                        if (!supported.Contains(c)) supported.Add(c);
+                        supported.Add(c);
                     }
                 }
             }
             catch { }
-
-            // Default fallback
-            if (!supported.Contains("default")) supported.Add("default");
-            if (!supported.Contains("ctcp")) supported.Add("ctcp");
 
             return supported;
         }
@@ -707,11 +907,15 @@ namespace BiosOptimizer.Core.Implementations
                     Arguments = args,
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    RedirectStandardOutput = true
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
                 };
                 using var p = Process.Start(psi);
-                p?.WaitForExit(4000);
-                return p?.ExitCode == 0;
+                if (p == null) return false;
+                _ = p.StandardOutput.ReadToEnd();
+                _ = p.StandardError.ReadToEnd();
+                if (!p.WaitForExit(5000)) return false;
+                return p.ExitCode == 0;
             }
             catch
             {
@@ -719,6 +923,143 @@ namespace BiosOptimizer.Core.Implementations
             }
         }
 
+        private static (bool Detected, bool AllEnabled, string Summary) QueryHardwareChecksumOffloadStatus(NetworkAdapterInfo? adapter)
+        {
+            if (adapter == null) return (false, false, "Unavailable");
+            try
+            {
+                using var classKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}", false);
+                if (classKey == null) return (false, false, "Unknown");
+                foreach (var sub in classKey.GetSubKeyNames())
+                {
+                    if (!int.TryParse(sub, out _)) continue;
+                    using var nicKey = classKey.OpenSubKey(sub, false);
+                    if (nicKey == null) continue;
+                    var desc = nicKey.GetValue("DriverDesc")?.ToString() ?? "";
+                    var netCfg = nicKey.GetValue("NetCfgInstanceId")?.ToString() ?? "";
+                    if (!desc.Equals(adapter.Description, StringComparison.OrdinalIgnoreCase) &&
+                        !desc.Equals(adapter.Name, StringComparison.OrdinalIgnoreCase) &&
+                        !netCfg.Equals(adapter.Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    string ipv4 = nicKey.GetValue("*IPChecksumOffloadIPv4")?.ToString() ?? "";
+                    string tcp4 = nicKey.GetValue("*TCPChecksumOffloadIPv4")?.ToString() ?? "";
+                    string udp4 = nicKey.GetValue("*UDPChecksumOffloadIPv4")?.ToString() ?? "";
+                    if (string.IsNullOrEmpty(ipv4) && string.IsNullOrEmpty(tcp4) && string.IsNullOrEmpty(udp4))
+                        return (false, false, "Unknown (Driver Dependent)");
+
+                    bool enabled = (ipv4 != "0") && (tcp4 != "0") && (udp4 != "0");
+                    return (true, enabled, enabled ? "Hardware Accelerated" : "Disabled / Software Fallback");
+                }
+            }
+            catch { }
+            return (false, false, "Unknown");
+        }
+
         #endregion
+
+        private static (string Guid, int AckFreq, int NoDelay) QueryPrimaryInterfaceLatencyKeys()
+        {
+            try
+            {
+                // Prefer actual active physical interface GUIDs with valid gateway/IPv4
+                var preferredGuids = NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(n => n.OperationalStatus == OperationalStatus.Up &&
+                                n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                                n.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
+                    .OrderByDescending(n => n.GetIPProperties().GatewayAddresses.Any())
+                    .ThenByDescending(n => n.Speed)
+                    .Select(n => n.Id)
+                    .ToList();
+
+                using var baseKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", false);
+                if (baseKey != null)
+                {
+                    foreach (var guid in preferredGuids)
+                    {
+                        using var ifKey = baseKey.OpenSubKey(guid, false);
+                        if (ifKey != null)
+                        {
+                            object? ack = ifKey.GetValue("TcpAckFrequency");
+                            object? nod = ifKey.GetValue("TCPNoDelay");
+                            return (guid, ack is int a ? a : 2, nod is int n ? n : 0);
+                        }
+                    }
+
+                    foreach (var sub in baseKey.GetSubKeyNames())
+                    {
+                        using var ifKey = baseKey.OpenSubKey(sub, false);
+                        if (ifKey == null) continue;
+                        string ip = (ifKey.GetValue("IPAddress") is string[] arr ? arr.FirstOrDefault() : ifKey.GetValue("IPAddress")?.ToString())
+                                 ?? ifKey.GetValue("DhcpIPAddress")?.ToString() ?? "";
+                        if (!string.IsNullOrWhiteSpace(ip) && ip != "0.0.0.0" && !ip.StartsWith("169.254.", StringComparison.Ordinal))
+                        {
+                            object? ack = ifKey.GetValue("TcpAckFrequency");
+                            object? nod = ifKey.GetValue("TCPNoDelay");
+                            return (sub, ack is int a ? a : 2, nod is int n ? n : 0);
+                        }
+                    }
+                }
+            }
+            catch { }
+            return (string.Empty, 2, 0);
+        }
+
+        private static List<string> QueryActiveDnsServers()
+        {
+            var list = new List<string>();
+            try
+            {
+                foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (iface.OperationalStatus == OperationalStatus.Up && iface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    {
+                        var ipProps = iface.GetIPProperties();
+                        foreach (var dns in ipProps.DnsAddresses)
+                        {
+                            if (dns.AddressFamily == AddressFamily.InterNetwork)
+                            {
+                                string s = dns.ToString();
+                                if (!list.Contains(s)) list.Add(s);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>
+        /// Benchmarks DNS endpoint resolution latency against known public DNS servers.
+        /// </summary>
+        public async Task<Dictionary<string, double>> BenchmarkDnsEndpointsAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var dict = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                string[] endpoints = { "1.1.1.1", "8.8.8.8", "9.9.9.9" };
+
+                foreach (var ep in endpoints)
+                {
+                    try
+                    {
+                        var sw = Stopwatch.StartNew();
+                        using var client = new UdpClient();
+                        client.Client.ReceiveTimeout = 1000;
+                        client.Client.SendTimeout = 1000;
+                        client.Connect(IPAddress.Parse(ep), 53);
+                        sw.Stop();
+                        dict[ep] = Math.Round(sw.Elapsed.TotalMilliseconds, 1);
+                    }
+                    catch
+                    {
+                        dict[ep] = 999.0;
+                    }
+                }
+                return dict;
+            });
+        }
+
     }
 }

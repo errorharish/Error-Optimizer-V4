@@ -1,0 +1,252 @@
+{
+  "connectivity": {
+    "modules": [
+      "bthport.sys",
+      "bthaudiohs.sys",
+      "bthhfenum.sys",
+      "bthmodem.sys",
+      "btwaudio.sys",
+      "btwi2c.sys",
+      "ibtusb.sys",
+      "rtbth",
+      "IntelBluetooth",
+      "QualcommBth",
+      "Netwtw",
+      "rtwlan",
+      "Qcamain"
+    ],
+    "paths": [
+      "\\Intel\\Wireless\\",
+      "\\Realtek\\Wireless\\",
+      "\\Qualcomm\\Wireless\\",
+      "\\Broadcom\\Wireless\\"
+    ],
+    "namePrefixes": [
+      "IntelWiFi",
+      "IntelBluetooth",
+      "IntelPROSet",
+      "iwlwifi",
+      "RtWlan",
+      "RtkWlan",
+      "RtkBtManServ",
+      "RealtekWireless",
+      "WlanExt",
+      "WlanSvc",
+      "Qcamain",
+      "QCAWiFi",
+      "qcwlan",
+      "BcmWl",
+      "Broadcom"
+    ]
+  },
+  "audio": {
+    "modules": [
+      "RTKVHD64.sys",
+      "RTKVHD.sys",
+      "DolbyDAX",
+      "DtsApo",
+      "DtsAudio",
+      "WavesSysSvc",
+      "WavesAudio",
+      "MaxxAudio",
+      "IntcAudioBus.sys",
+      "IntcOED.sys",
+      "amdhd",
+      "HDAudio.sys",
+      "Nahimic"
+    ],
+    "processes": [
+      "audiodg.exe",
+      "AudioSrv",
+      "AudioEndpointBuilder",
+      "dasHost.exe",
+      "RtkAudUService64.exe",
+      "RtkAudioService64.exe",
+      "RAVBg64.exe",
+      "RAVCpl64.exe",
+      "RTHDVCPL.exe",
+      "RtHDVBg.exe",
+      "RealtekService.exe",
+      "WavesSysSvc64.exe",
+      "DtsApo4Service.exe"
+    ],
+    "nameKeywords": [
+      "Realtek",
+      "Dolby",
+      "DtsApo",
+      "DtsAudio",
+      "DTSAudioService",
+      "WavesSysSvc",
+      "WavesMaxxAudio",
+      "Waves MaxxAudio",
+      "Nahimic",
+      "Sonic Studio",
+      "Sonic Radar",
+      "A-Volute",
+      "Intel SST",
+      "Intel Smart Sound",
+      "AMD HD Audio",
+      "NVIDIA HD Audio",
+      "Cirrus Logic",
+      "Conexant"
+    ]
+  },
+  "displayGpu": {
+    "modules": [
+      "nvlddmkm.sys",
+      "nvppc.sys",
+      "igdkmd64.sys",
+      "amdkmdag.sys",
+      "amdkmdap.sys",
+      "atikmdag.sys"
+    ],
+    "processes": [
+      "dwm.exe",
+      "NVDisplay.Container.exe",
+      "nvcontainer.exe",
+      "nvsphelper64.exe",
+      "atieclxx.exe",
+      "RadeonSoftware.exe",
+      "RadeonSettings.exe",
+      "amdfendrsr.exe",
+      "igfxEM.exe",
+      "igfxHK.exe",
+      "igfxTray.exe",
+      "IntelCpHDCPSvc.exe",
+      "IntelGraphics.exe",
+      "IntelDisplay.exe"
+    ]
+  },
+  "storage": {
+    "processes": [
+      "IAStorDataMgrSvc.exe",
+      "IAStorIcon.exe",
+      "RstMwService.exe",
+      "SamsungMagician.exe",
+      "MagicianSvc.exe",
+      "CrucialStorageExecutive.exe",
+      "SearchIndexer.exe"
+    ]
+  },
+  "input": {
+    "processes": [
+      "TextInputHost.exe",
+      "ctfmon.exe",
+      "TabletInputService.exe",
+      "SynTPEnh.exe",
+      "SynTPHelper.exe",
+      "ETDService.exe",
+      "ETDCtrl.exe",
+      "iCUE.exe",
+      "Corsair.Service.exe",
+      "lghub.exe",
+      "lghub_agent.exe",
+      "Razer Synapse Service.exe",
+      "RazerSynapse.exe",
+      "SteelSeriesGG.exe",
+      "DragonCenter.exe",
+      "Wacom_Tablet.exe"
+    ]
+  },
+  "security": {
+    "modules": [
+      "fvevol.sys",
+      "fveapi.dll"
+    ],
+    "processes": [
+      "MsMpEng.exe",
+      "DefenderSessionHelper.exe",
+      "NisSrv.exe",
+      "MpDefenderCoreService.exe",
+      "SecurityHealthService.exe",
+      "SecurityHealthSystray.exe",
+      "SGrmBroker.exe",
+      "LsaIso.exe"
+    ],
+    "vendors": [
+      "Kaspersky",
+      "ESET",
+      "Bitdefender",
+      "McAfee",
+      "Symantec",
+      "Norton",
+      "Avast",
+      "avgui",
+      "avgsvc",
+      "avgtpx",
+      "avgidsagent",
+      "avgwdsvc",
+      "Malwarebytes",
+      "CrowdStrike",
+      "SentinelOne",
+      "Carbon Black",
+      "Sophos",
+      "Trend Micro",
+      "Webroot",
+      "Avira",
+      "F-Secure",
+      "K7TS",
+      "K7CrvSvc",
+      "K7RTScan",
+      "K7SysMon",
+      "K7AV",
+      "K7FW",
+      "Comodo",
+      "360Tray",
+      "360Safe",
+      "360sd",
+      "360rp",
+      "ZhuDongFangYu",
+      "QHSafeTray",
+      "Dr.Web"
+    ]
+  },
+  "laptopPowerThermal": {
+    "Dell": [
+      "DellPowerManagerService.exe",
+      "DellDataVault.exe",
+      "DellDataVaultWsk.exe",
+      "DellTechHub.exe"
+    ],
+    "HP": [
+      "HPPowerManager.exe",
+      "HPSupportAssistant.exe",
+      "HPSupportSolutionsFrameworkService.exe"
+    ],
+    "Lenovo": [
+      "LenovoVantageService.exe",
+      "Lenovo.Modern.ImController.exe",
+      "LenovoPowerManagement.exe"
+    ],
+    "ASUS": [
+      "ASUSOptimization.exe",
+      "ASUSSystemAnalysis.exe",
+      "AsusSoftwareManager.exe"
+    ],
+    "MSI": [
+      "MSICenter.exe",
+      "MSICenterService.exe"
+    ],
+    "Acer": [
+      "AcerPowerManager.exe",
+      "AcerQuickAccess.exe",
+      "AcerCareCenter.exe"
+    ],
+    "Razer": [
+      "RazerSynapseService.exe",
+      "RazerCentralService.exe"
+    ],
+    "Samsung": [
+      "SamsungSettings.exe",
+      "SamsungPowerManagement.exe"
+    ],
+    "General": [
+      "DptfService.exe",
+      "dptf_helper.exe",
+      "ipf_uf.exe",
+      "ipf_helper.exe",
+      "AmdPpm.exe",
+      "AmdPower.exe"
+    ]
+  }
+}

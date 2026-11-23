@@ -666,13 +666,20 @@ namespace BiosOptimizer.GUI.ViewModels
                         // Statistics
                         if (raw.Category != GpuRegistryCategory.Diagnostic)
                         {
-                            if (raw.Status == RegistryValueStatus.AlreadyConfigured) optCount++;
+                            if (raw.Status == RegistryValueStatus.AlreadyConfigured)
+                            {
+                                appCount++;
+                                optCount++;
+                            }
                             else if (raw.Status == RegistryValueStatus.Recommended || raw.Status == RegistryValueStatus.RequiresRestart || raw.Status == RegistryValueStatus.Failed)
                             {
                                 appCount++;
                                 pendCount++;
                             }
-                            else if (raw.Status == RegistryValueStatus.NotApplicable) notAppCount++;
+                            else if (raw.Status == RegistryValueStatus.NotApplicable)
+                            {
+                                notAppCount++;
+                            }
                         }
                     }
 
@@ -802,7 +809,7 @@ namespace BiosOptimizer.GUI.ViewModels
                     failedCount: fail,
                     durationText: "0.7s",
                     backupStatus: "Created (GPU Registry Hive)",
-                    verificationStatus: fail == 0 ? "100% Verified" : "Partial Verification",
+                    verificationStatus: fail == 0 ? "Verified" : "Partial Verification",
                     rollbackStatus: "Available via Rollback Manager",
                     items: details
                 );

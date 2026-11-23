@@ -53,13 +53,15 @@ namespace BiosOptimizer.Service.Engine
                     {
                         foreach (var obj in searcher.Get())
                         {
-                            profile.CpuName = obj["Name"]?.ToString() ?? "Unknown";
+                            profile.CpuName = obj["Name"]?.ToString()?.Trim() ?? "Unknown";
                             profile.CpuVendor = obj["Manufacturer"]?.ToString() ?? "Unknown";
                             if (int.TryParse(obj["NumberOfCores"]?.ToString(), out int cores)) profile.PhysicalCores = cores;
                             if (int.TryParse(obj["NumberOfLogicalProcessors"]?.ToString(), out int logical)) profile.LogicalProcessors = logical;
-                            
-                            // Simple hybrid detection for newer Intels
-                            if (profile.CpuVendor.Contains("Intel") && profile.PhysicalCores > 0 && profile.LogicalProcessors > profile.PhysicalCores * 2)
+
+                            // Hybrid CPU topology (e.g. Intel P+E cores): E-cores lack SMT so LogicalProcessors lies between PhysicalCores and PhysicalCores * 2
+                            if (profile.PhysicalCores > 0 &&
+                                profile.LogicalProcessors > profile.PhysicalCores &&
+                                profile.LogicalProcessors < profile.PhysicalCores * 2)
                             {
                                 profile.IsHybridArchitecture = true;
                             }
@@ -67,28 +69,49 @@ namespace BiosOptimizer.Service.Engine
                         }
                     }
 
-                    // GPU Info
-                    using (var searcher = new ManagementObjectSearcher("SELECT Name, AdapterRAM FROM Win32_VideoController"))
+                    // GPU Info (Prefer 64-bit DXGI VRAM over WMI 32-bit uint AdapterRAM)
+                    var dxgiGpus = BiosOptimizer.Core.Implementations.DxgiGpuReader.EnumerateAdapters();
+                    if (dxgiGpus.Count > 0)
                     {
+                        foreach (var g in dxgiGpus)
+                        {
+                            string vendor = g.VendorId switch
+                            {
+                                0x10DE => "NVIDIA",
+                                0x1002 => "AMD",
+                                0x8086 => "Intel",
+                                _ => "Unknown"
+                            };
+                            long vram = (long)g.DedicatedVideoMemoryBytes;
+                            profile.Gpus.Add(new GpuDto { Name = g.Description, VramBytes = vram, Vendor = vendor });
+                            if (g.IsDedicatedGpu || string.IsNullOrEmpty(profile.GpuName))
+                            {
+                                profile.GpuName = g.Description;
+                                profile.GpuVRamBytes = vram;
+                                profile.GpuVendor = vendor;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        using var searcher = new ManagementObjectSearcher("SELECT Name, AdapterRAM FROM Win32_VideoController");
                         foreach (var obj in searcher.Get())
                         {
                             var gpuName = obj["Name"]?.ToString() ?? "Unknown";
+                            if (gpuName.Contains("Basic Render", StringComparison.OrdinalIgnoreCase) || gpuName.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+                                continue;
+
                             var ramObj = obj["AdapterRAM"];
                             long vram = 0;
                             if (ramObj != null && uint.TryParse(ramObj.ToString(), out uint ram))
-                            {
                                 vram = ram;
-                            }
-                            
-                            // Detect vendor
+
                             string vendor = "Unknown";
                             if (gpuName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)) vendor = "NVIDIA";
                             else if (gpuName.Contains("AMD", StringComparison.OrdinalIgnoreCase) || gpuName.Contains("Radeon", StringComparison.OrdinalIgnoreCase)) vendor = "AMD";
                             else if (gpuName.Contains("Intel", StringComparison.OrdinalIgnoreCase)) vendor = "Intel";
-                            
+
                             profile.Gpus.Add(new GpuDto { Name = gpuName, VramBytes = vram, Vendor = vendor });
-                            
-                            // Keep the first one as primary for backwards compatibility
                             if (string.IsNullOrEmpty(profile.GpuName))
                             {
                                 profile.GpuName = gpuName;

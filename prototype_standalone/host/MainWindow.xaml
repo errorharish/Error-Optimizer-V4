@@ -1,0 +1,88 @@
+<Window x:Class="ErrorOptimizerPrototypeHost.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="ERROR OPTIMIZER V4"
+        Width="1280"
+        Height="820"
+        ResizeMode="CanMinimize"
+        WindowStyle="None"
+        WindowStartupLocation="CenterScreen"
+        Background="#050811"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Loaded="MainWindow_Loaded"
+        SizeChanged="MainWindow_SizeChanged"
+        StateChanged="MainWindow_StateChanged">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            ResizeBorderThickness="0"
+                            GlassFrameThickness="1"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid Background="#050811" UseLayoutRounding="True" SnapsToDevicePixels="True">
+        <!-- Direct hardware-accelerated HWND WebView2 for 1:1 Chromium ClearType, SVG, and animation clarity -->
+        <wv2:WebView2 x:Name="AppWebView"
+                      DefaultBackgroundColor="#050811"
+                      ZoomFactor="1.0"
+                      UseLayoutRounding="True"
+                      SnapsToDevicePixels="True" />
+
+        <!-- Recovery overlay shown only if WebView2 runtime or bundled frontend fails to load -->
+        <Grid x:Name="RecoveryOverlay"
+              Background="#050811"
+              Visibility="Collapsed">
+            <Border MaxWidth="520"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Padding="28"
+                    CornerRadius="12"
+                    Background="#0D1426"
+                    BorderBrush="#1A2544"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="ERROR OPTIMIZER"
+                               FontSize="13"
+                               FontWeight="Bold"
+                               Foreground="#38BDF8"
+                               Margin="0,0,0,8" />
+                    <TextBlock x:Name="RecoveryTitle"
+                               Text="Unable to initialize interface"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#F8FAFC"
+                               Margin="0,0,0,10" />
+                    <TextBlock x:Name="RecoveryMessage"
+                               Text="Microsoft Edge WebView2 Runtime is required to display the application interface."
+                               TextWrapping="Wrap"
+                               FontSize="13"
+                               LineHeight="20"
+                               Foreground="#94A3B8"
+                               Margin="0,0,0,20" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Close"
+                                Padding="16,8"
+                                Margin="0,0,10,0"
+                                Background="#121B32"
+                                Foreground="#F8FAFC"
+                                BorderBrush="#1A2544"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="CloseRecoveryButton_Click" />
+                        <Button Content="Retry"
+                                Padding="18,8"
+                                Background="#2563EB"
+                                Foreground="#FFFFFF"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Click="RetryButton_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

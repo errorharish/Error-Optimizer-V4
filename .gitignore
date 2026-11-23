@@ -1,6 +1,10 @@
-## .gitignore for Error Optimizer
+## ===============================================================================
+## ERROR OPTIMIZER V4 — AUTHORITATIVE GITIGNORE
+## ===============================================================================
 
-# Build results
+# .NET Build outputs
+[Bb]in/
+[Oo]bj/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -10,28 +14,45 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-[Ll]ogs/
 *_wpftmp.*
 
-# Visual Studio / Rider / VSCode
+# Standalone and Service Publish Directories
+publish/
+publish_out/
+publish_standalone/
+dist/
+assets/prerequisites/
+
+# Local .NET SDK Toolchain & Dependencies
+.dotnet/
+.nuget/
+packages/
+*.nupkg
+
+# Node.js & Frontend Build Outputs
+node_modules/
+**/node_modules/
+prototype_standalone/frontend/dist/
+prototype_standalone/frontend/.output/
+prototype_standalone/frontend/.vinxi/
+prototype_standalone/frontend/.tanstack/
+prototype_standalone/frontend-bundle.zip
+.npm/
+
+# IDE & Editor files
 .vs/
 .vscode/
 .idea/
 *.user
 *.userosscache
-*.sln.docstates
 *.suo
+*.sln.docstates
 
-# Test results
+# Test & Diagnostics
 TestResults/
 *.trx
 *.coverage
 *.coveragexml
-
-# Temporary & Crash files
 *.log
 *.err
 *.tmp
@@ -43,7 +64,51 @@ gui_debug.log
 service*.log
 svc_output*.txt
 
-# OS generated
+# Secrets, Environment & Sensitive Files
+*.env
+*.env.*
+*.pfx
+*.p12
+*.pem
+*.snk
+*.key
+
+# Local machine data, backups, and temporary working folders
+backups/
+src_backup/
+scratch/
+references/
+PipeTest/
+testproj/
+user_prompt_*.txt
+prompt*.txt
+*.txt
+scratch_*
+*.zip
+fix.*
+test_*.cs
+test_*.ps1
+Test*.cs
+VerifyRam.cs
+FixTryCatch.cs
+testpipe.cs
+dotnet-install.ps1
+EmptyStandbyList.exe
+ERROR-OPTIMIZER-V4-GITHUB/
+ERROR_OPTIMIZER_AI_HANDOFF/
+ERROR_OPTIMIZER_EXACT_PROTOTYPE_EXPORT/
+LOVABLE_UI_HANDOFF/
+hello-there-60-main/
+*_report.md
+*_REPORT.md
+*_PLAN.md
+*_MAPPING.md
+*_BASELINE.md
+*_FORENSIC.md
+*_AUDIT.md
+*.bak
+
+# OS-generated files
 Thumbs.db
 ehthumbs.db
 Desktop.ini

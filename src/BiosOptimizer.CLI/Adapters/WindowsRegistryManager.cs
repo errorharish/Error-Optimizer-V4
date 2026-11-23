@@ -1,4 +1,6 @@
+using System;
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using BiosOptimizer.Core.Interfaces;
 using Microsoft.Win32;
 
@@ -65,11 +67,61 @@ public class WindowsRegistryManager : IRegistryManager
         return true;
     }
 
+    private static RegistryKey? _cachedUserHive;
+    private static readonly object _hiveLock = new();
+
+    private static RegistryKey ResolveCurrentUserHive()
+    {
+        try
+        {
+            var identity = WindowsIdentity.GetCurrent();
+            if (identity.IsSystem)
+            {
+                lock (_hiveLock)
+                {
+                    if (_cachedUserHive != null)
+                    {
+                        try
+                        {
+                            _ = _cachedUserHive.Name;
+                            return _cachedUserHive;
+                        }
+                        catch
+                        {
+                            _cachedUserHive = null;
+                        }
+                    }
+
+                    string[] subKeys = Registry.Users.GetSubKeyNames();
+                    foreach (var sid in subKeys)
+                    {
+                        if (sid.StartsWith("S-1-5-21-", StringComparison.OrdinalIgnoreCase) &&
+                            !sid.EndsWith("_Classes", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var userKey = Registry.Users.OpenSubKey(sid, true) ?? Registry.Users.OpenSubKey(sid, false);
+                            if (userKey != null)
+                            {
+                                _cachedUserHive = userKey;
+                                return _cachedUserHive;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to standard CurrentUser
+        }
+
+        return Registry.CurrentUser;
+    }
+
     private RegistryKey? GetHive(string hiveString)
     {
         return hiveString.ToUpperInvariant() switch
         {
-            "HKCU" or "HKEY_CURRENT_USER" => Registry.CurrentUser,
+            "HKCU" or "HKEY_CURRENT_USER" => ResolveCurrentUserHive(),
             "HKLM" or "HKEY_LOCAL_MACHINE" => Registry.LocalMachine,
             "HKU" or "HKEY_USERS" => Registry.Users,
             "HKCR" or "HKEY_CLASSES_ROOT" => Registry.ClassesRoot,

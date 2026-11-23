@@ -31,7 +31,65 @@ namespace BiosOptimizer.Core.V4.Metrics
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
 
-        public OptimizationMetricsDto SampleCurrentMetrics()
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
+
+        private static readonly object _cpuLock = new();
+
+        /// <summary>
+        /// Samples host CPU utilization over a consistent, self-contained multi-sample window
+        /// (fresh baseline per call so before/after comparisons always span identical intervals).
+        /// </summary>
+        public static double SampleSystemCpuPercent(int samples = 3, int intervalMs = 50)
+        {
+            lock (_cpuLock)
+            {
+                try
+                {
+                    if (!GetSystemTimes(out long prevIdle, out long prevKernel, out long prevUser))
+                        return 0.0;
+
+                    double totalPct = 0.0;
+                    int validSamples = 0;
+                    int targetSamples = Math.Max(1, samples);
+                    int sleepMs = Math.Clamp(intervalMs, 20, 250);
+
+                    for (int s = 0; s < targetSamples; s++)
+                    {
+                        System.Threading.Thread.Sleep(sleepMs);
+                        if (!GetSystemTimes(out long idleTime, out long kernelTime, out long userTime))
+                            break;
+
+                        long usrDelta = userTime - prevUser;
+                        long kerDelta = kernelTime - prevKernel;
+                        long idlDelta = idleTime - prevIdle;
+
+                        prevIdle = idleTime;
+                        prevKernel = kernelTime;
+                        prevUser = userTime;
+
+                        long sysTotal = usrDelta + kerDelta;
+                        if (sysTotal > 0)
+                        {
+                            long busy = sysTotal - idlDelta;
+                            double pct = Math.Clamp((double)busy / sysTotal * 100.0, 0.0, 100.0);
+                            totalPct += pct;
+                            validSamples++;
+                        }
+                    }
+
+                    if (validSamples > 0)
+                    {
+                        return Math.Clamp(Math.Round(totalPct / validSamples, 1), 0.0, 100.0);
+                    }
+                }
+                catch { }
+                return 0.0;
+            }
+        }
+
+        public OptimizationMetricsDto SampleCurrentMetrics(int cpuSamples = 3)
         {
             var dto = new OptimizationMetricsDto();
 
@@ -56,8 +114,8 @@ namespace BiosOptimizer.Core.V4.Metrics
                 dto.RamUsedMb = Math.Round(dto.RamTotalMb - dto.RamAvailableMb, 1);
             }
 
-            // CPU utilization estimate
-            dto.CpuUtilizationPercent = 0.0;
+            // Real physical multi-sample smoothed CPU utilization measurement
+            dto.CpuUtilizationPercent = SampleSystemCpuPercent(cpuSamples, 35);
 
             // Dispose handles
             foreach (var p in processes)

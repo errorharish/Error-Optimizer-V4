@@ -33,7 +33,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
 
         public string ButtonText => !IsDetected
             ? "NOT AVAILABLE"
-            : (PendingCount == 0 && OptimizedCount > 0 ? "ALREADY OPTIMIZED" : $"OPTIMIZE {GroupName}");
+            : (PendingCount == 0 && OptimizedCount > 0 ? "CONFIGURATION VERIFIED" : $"OPTIMIZE {GroupName}");
 
         public string BadgeBrushKey => !IsDetected
             ? "TextMutedBrush"

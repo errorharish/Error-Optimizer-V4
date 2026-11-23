@@ -1,19 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net8.0-windows10.0.19041</TargetFramework>
     <AssemblyName>ErrorOptimizer</AssemblyName>
     <Nullable>disable</Nullable>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\app_logo.ico</ApplicationIcon>
-    <Version>2026.8.20.1206</Version>
-    <FileVersion>2026.8.20.1206</FileVersion>
-    <AssemblyVersion>2026.8.20.1206</AssemblyVersion>
+    <Version>2026.10.8.1421</Version>
+    <FileVersion>2026.10.8.1421</FileVersion>
+    <AssemblyVersion>2026.10.8.1421</AssemblyVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,15 +20,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\V4.UI\**\*.cs" Link="V4.UI\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Page Include="..\V4.UI\**\*.xaml" Link="V4.UI\%(RecursiveDir)%(Filename)%(Extension)">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.11" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Resource Include="Assets\app_logo.ico" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Remove="System.Drawing" />
-    <Using Remove="System.Windows.Forms" />
-  </ItemGroup>
 </Project>

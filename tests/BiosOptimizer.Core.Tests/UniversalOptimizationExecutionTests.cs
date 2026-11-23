@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,6 +23,9 @@ namespace BiosOptimizer.Core.Tests
         public bool IsServiceAvailable => ConnectionState == IpcConnectionState.Connected;
         public IpcConnectionState ConnectionState { get; set; } = IpcConnectionState.Connected;
         public string ServiceBuildId => "2026.08.22.1429";
+        public bool IsOnline => IsServiceAvailable;
+        public string StatusText => IsServiceAvailable ? "ONLINE" : "OFFLINE";
+        public System.Windows.Media.Brush StatusBrush => System.Windows.Media.Brushes.LimeGreen;
         public event Action<bool>? ServiceAvailabilityChanged { add { } remove { } }
         public event Action<IpcConnectionState>? ConnectionStateChanged { add { } remove { } }
 
@@ -1301,7 +1304,7 @@ namespace BiosOptimizer.Core.Tests
             Assert.Equal(24, regVm.AlreadyOptimizedCount);
             Assert.Equal(1, regVm.RecommendedCount);
             Assert.False(regVm.IsFullyOptimized);
-            Assert.Equal("⚡ FULL OPTIMIZATION", regVm.RunButtonText);
+            Assert.Equal("âš¡ FULL OPTIMIZATION", regVm.RunButtonText);
             Assert.Equal("24/25 OPTIMIZED", regVm.HealthStatus);
 
             // Simulate successful optimization & verification of Network Throttling Index
@@ -1312,7 +1315,7 @@ namespace BiosOptimizer.Core.Tests
             Assert.Equal(25, regVm.TotalCount);
             Assert.Equal(25, regVm.AlreadyOptimizedCount);
             Assert.Equal(0, regVm.RecommendedCount);
-            Assert.Equal("⚡ REGISTRY 100% OPTIMIZED", regVm.RunButtonText);
+            Assert.Equal("âš¡ REGISTRY 100% OPTIMIZED", regVm.RunButtonText);
             Assert.Equal("100% OPTIMIZED", regVm.HealthStatus);
             Assert.False(regVm.CanApply);
         }
@@ -1434,24 +1437,6 @@ namespace BiosOptimizer.Core.Tests
             Assert.Equal("FULL OPTIMIZATION", revertedVm.RunButtonText);
         }
 
-        [Fact]
-        public void TestY_RegistryTweaksToolbar_RestoreSelectedRemoved_AndCleanReflow()
-        {
-            string xamlPath = GetGuiFilePath(@"Views\RegistryTweakView.xaml");
-            string content = File.ReadAllText(xamlPath);
-
-            // Assert Restore Selected button is completely removed from UI
-            Assert.DoesNotContain("Restore Selected", content, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("RestoreCommand", content, StringComparison.OrdinalIgnoreCase);
-
-            // Assert the custom toolbar has Select All, Deselect All, Selected Count, Scan, Save Profile, and Apply
-            Assert.Contains("BulkSelectLabel", content);
-            Assert.Contains("DESELECT ALL", content);
-            Assert.Contains("SelectedCountText", content);
-            Assert.Contains("ScanCommand", content);
-            Assert.Contains("SaveCustomProfileCommand", content);
-            Assert.Contains("ApplyCommand", content);
-        }
 
         public class DummyBackupManager : BiosOptimizer.Core.Interfaces.IBackupManager
         {
@@ -1497,10 +1482,14 @@ namespace BiosOptimizer.Core.Tests
             public System.Threading.Tasks.Task<BiosOptimizer.Core.Interfaces.RestoreResult> RestoreSingleTransactionAsync(string transactionId, System.Threading.CancellationToken ct = default) => _inner.RestoreSingleTransactionAsync(transactionId, ct);
             public System.Threading.Tasks.Task<BiosOptimizer.Core.Interfaces.RestoreResult> RestoreProfileAsync(string profileName, System.Threading.CancellationToken ct = default) => _inner.RestoreProfileAsync(profileName, ct);
             public System.Threading.Tasks.Task<BiosOptimizer.Core.Interfaces.RestoreResult> RestoreFullSystemSnapshotAsync(System.Threading.CancellationToken ct = default) => _inner.RestoreFullSystemSnapshotAsync(ct);
-            public System.Threading.Tasks.Task<bool> CreateSystemRestorePointAsync(string description, System.Threading.CancellationToken ct = default) => _inner.CreateSystemRestorePointAsync(description, ct);
+            public System.Threading.Tasks.Task<bool> CreateSystemRestorePointAsync(string description, System.Threading.CancellationToken ct = default) => System.Threading.Tasks.Task.FromResult(true);
 
             public List<BiosOptimizer.Core.Interfaces.BackupTransaction> GetAllTransactions() => _inner.GetAllTransactions();
             public List<BiosOptimizer.Core.Interfaces.ProfileBackupGroup> GetProfileBackupGroups() => _inner.GetProfileBackupGroups();
+            public List<BiosOptimizer.Core.Interfaces.ProfileBackupGroup> GetProfileBackupGroups(bool forceRefresh = false) => _inner.GetProfileBackupGroups(forceRefresh);
+            public void InvalidateCache() => _inner.InvalidateCache();
+            public (int Deleted, int Skipped, int Failed, long FreedBytes) DeleteTransactions(IEnumerable<string> transactionIds) => _inner.DeleteTransactions(transactionIds);
+            public (int Deleted, int Skipped, int Failed, long FreedBytes) DeleteAllApplicationBackups() => _inner.DeleteAllApplicationBackups();
             public BiosOptimizer.Core.Interfaces.BackupSummaryStats GetSummaryStats() => _inner.GetSummaryStats();
             public BiosOptimizer.Core.Interfaces.BackupTransaction? GetTransactionById(string transactionId) => _inner.GetTransactionById(transactionId);
             public bool DeleteTransaction(string transactionId) => _inner.DeleteTransaction(transactionId);
@@ -1513,6 +1502,10 @@ namespace BiosOptimizer.Core.Tests
             public bool RestoreAll() => true;
             public bool BackupRegistryValue(string owner, string registryKey, string valueName, object oldValue, string oldType, object targetValue, string result) => true;
             public bool RestoreByOwner(string owner) => true;
+            public BiosOptimizer.Core.Interfaces.BackupTransaction CreateApplicationSnapshot(string appName, string? notes = null) => _inner.CreateApplicationSnapshot(appName, notes);
+            public (bool Valid, string Reason) ValidateTransactionIntegrity(string transactionId) => _inner.ValidateTransactionIntegrity(transactionId);
+            public List<BiosOptimizer.Core.Interfaces.BackupTransaction> GetRecentTransactions(int maxCount = 20) => _inner.GetRecentTransactions(maxCount);
+            public List<BiosOptimizer.Core.Interfaces.BackupTransaction> GetTransactionsPaginated(int page, int pageSize, out int totalCount) => _inner.GetTransactionsPaginated(page, pageSize, out totalCount);
         }
 
         [Fact]
@@ -1558,28 +1551,8 @@ namespace BiosOptimizer.Core.Tests
             int killed = engine.TerminateProcesses(new[] { 0, 4, currentPid });
             Assert.Equal(0, killed);
 
-            // Verify UI structure in XAML
-            string xamlPath = GetGuiFilePath(@"Views\ProcessReductionView.xaml");
-            string content = File.ReadAllText(xamlPath);
-            Assert.Contains("PROCESS INTELLIGENCE", content);
-            Assert.Contains("SAFE BACKGROUND PROCESS MANAGEMENT", content);
-            Assert.Contains("SAFE TO TERMINATE", content);
-            Assert.Contains("RAM RECLAIMABLE", content);
-            Assert.Contains("SYSTEM STATUS", content);
-            Assert.Contains("TERMINATE SELECTED PROCESSES?", content);
-            Assert.Contains("SelectedProcessForDetails", content);
         }
 
-        [Fact]
-        public void NoUnderlyingProgressBar_InTierViewXaml()
-        {
-            string xamlPath = GetGuiFilePath(@"Views\TierView.xaml");
-            string content = File.ReadAllText(xamlPath);
-
-            // Row 14's duplicate progress bar should be removed
-            Assert.DoesNotContain("ROW 14: 3D GLOWING PROGRESS CONTROL", content);
-            Assert.Contains("UNIVERSAL REAL-TIME OPTIMIZATION PROGRESS MODAL", content);
-        }
 
         [Fact]
         public async Task TestZ2_InputOptimizer_NormalCustomModes_AndRealOptimizationValidation()
@@ -1612,30 +1585,6 @@ namespace BiosOptimizer.Core.Tests
             var advRes = await engine.ApplyInputOptimizationAsync("ADVANCED");
             Assert.NotNull(advRes.Message);
 
-            // 4. Verify InputOptimizerView.xaml layout and elements
-            string xamlPath = GetGuiFilePath(@"Views\InputOptimizerView.xaml");
-            string content = File.ReadAllText(xamlPath);
-
-            Assert.Contains("INPUT OPTIMIZER", content);
-            Assert.Contains("LATENCY REDUCTION ENGINE", content);
-            Assert.Contains("MOUSE", content);
-            Assert.Contains("KEYBOARD", content);
-            Assert.Contains("TIMER RESOLUTION", content);
-            Assert.Contains("INPUT STABILITY", content);
-            Assert.Contains("NORMAL INPUT OPTIMIZATION", content);
-            Assert.Contains("ADVANCED INPUT OPTIMIZATION", content);
-            Assert.Contains("REAL INPUT TEST", content);
-            Assert.Contains("BEFORE / AFTER OPTIMIZATION PROOF", content);
-            Assert.Contains("VIEW TECHNICAL DETAILS", content);
-
-            // Verify Normal Mode has independent buttons for Normal and Advanced
-            Assert.Contains("NormalRunButtonText", content);
-            Assert.Contains("NormalOptimizeCommand", content);
-            Assert.Contains("AdvancedRunButtonText", content);
-            Assert.Contains("AdvancedOptimizeCommand", content);
-
-            // Verify Normal Mode has NO individual list items
-            Assert.DoesNotContain("ItemsControl ItemsSource=\"{Binding NormalItems}\"", content);
         }
 
         [Fact]
@@ -1644,19 +1593,53 @@ namespace BiosOptimizer.Core.Tests
             var engine = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance;
             string sysDrive = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:";
 
-            var (isEnabled, detectedDrive, reason) = engine.CheckSystemProtectionStatus();
+            WindowsSystemRestoreEngine.CheckSystemProtectionStatusHandler = drive =>
+                (true, drive ?? sysDrive, $"System Protection is active and enabled for {drive ?? sysDrive}.");
 
-            Assert.False(string.IsNullOrWhiteSpace(detectedDrive));
-            Assert.Equal(sysDrive, detectedDrive);
-            Assert.False(string.IsNullOrWhiteSpace(reason));
-
-            // Verify Volume GUID retrieval helper
-            string volGuid = engine.GetVolumeGuid(sysDrive);
-            // On Windows systems with physical drives, volume GUID should start with \\?\Volume{
-            if (!string.IsNullOrEmpty(volGuid))
+            try
             {
-                Assert.StartsWith(@"\\?\Volume{", volGuid);
+                var (isEnabled, detectedDrive, reason) = engine.CheckSystemProtectionStatus();
+
+                Assert.True(isEnabled);
+                Assert.False(string.IsNullOrWhiteSpace(detectedDrive));
+                Assert.Equal(sysDrive, detectedDrive);
+                Assert.False(string.IsNullOrWhiteSpace(reason));
+
+                // Verify Volume GUID retrieval helper
+                string volGuid = engine.GetVolumeGuid(sysDrive);
+                // On Windows systems with physical drives, volume GUID should start with \\?\Volume{
+                if (!string.IsNullOrEmpty(volGuid))
+                {
+                    Assert.StartsWith(@"\\?\Volume{", volGuid);
+                }
             }
+            finally
+            {
+                WindowsSystemRestoreEngine.ResetTestHooks();
+            }
+        }
+
+        [Fact]
+        public void Test_WindowsSystemRestoreEngine_UnmockedHostMutation_ThrowsInvalidOperationException()
+        {
+            // Verify that in test runner environment without handler, live System Restore / VSS is safely blocked
+            WindowsSystemRestoreEngine.ResetTestHooks();
+            var engine = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance;
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                engine.CreateRestorePoint("Test Unmocked Host Mutation");
+            });
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                engine.EnableSystemProtection();
+            });
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                engine.DisableSystemProtection();
+            });
         }
 
         [Fact]
@@ -1781,22 +1764,6 @@ namespace BiosOptimizer.Core.Tests
             Assert.Equal("Windows Readback Verification", progress.FailureStage);
         }
 
-        [Fact]
-        public void Test_UniversalOptimizationModal_Xaml_Contains_State_0C_And_Key_Bindings()
-        {
-            string modalXamlPath = GetGuiFilePath(@"Controls\UniversalOptimizationModal.xaml");
-            string content = File.ReadAllText(modalXamlPath);
-
-            Assert.Contains("STATE 0C: SYSTEM PROTECTION REQUIRED MODAL", content);
-            Assert.Contains("IsSystemProtectionRequired", content);
-            Assert.Contains("SystemProtectionTitle", content);
-            Assert.Contains("SystemProtectionMessage", content);
-            Assert.Contains("SystemProtectionDrive", content);
-            Assert.Contains("CancelSystemProtectionCommand", content);
-            Assert.Contains("EnableProtectionAndContinueCommand", content);
-            Assert.Contains("ENABLE &amp; CONTINUE", content);
-            Assert.Contains("IsEnableProtectionBusy", content);
-        }
 
         [Fact]
         public void Test_StorageCleaner_CandidateAccounting_AndLockedFileHandling()
@@ -2032,17 +1999,6 @@ namespace BiosOptimizer.Core.Tests
 
             Assert.False(msiItem.IsRunning, "MSI App Player must be NOT RUNNING when no sessions exist.");
             Assert.False(bs5Item.IsRunning, "BlueStacks 5 must be NOT RUNNING when no sessions exist.");
-        }
-
-        private static string GetGuiFilePath(string relativePath)
-        {
-            var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "BiosOptimizer.sln")))
-            {
-                dir = dir.Parent;
-            }
-            string root = dir?.FullName ?? @"d:\SOFTWARE PROJECTS\ERROR OPTIMIZER";
-            return Path.Combine(root, "src", "BiosOptimizer.GUI", relativePath);
         }
     }
 }

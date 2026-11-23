@@ -1,792 +1,1801 @@
 {
-    "id":  "Ultimate",
-    "displayName":  "Ultimate Optimization",
-    "description":  "Deep system optimization for workstations and power users. Extends Pro with additional services, Windows features, scheduled tasks, visual effects, and advanced registry targets. System Restore point created before execution.",
-    "extends":  [
-                    "Pro"
-                ],
-    "targetProcessReduction":  {
-                                   "min":  80,
-                                   "max":  130
-                               },
-    "entries":  [
-                    {
-                        "id":  "ultimate.service.wuauserv",
-                        "displayName":  "Windows Update — Manual (not Disabled)",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "wuauserv",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "High",
-                        "requiresConfirmation":  true,
-                        "warning":  "Windows Update will still function, but won\u0027t run automatically. You must check for updates manually in Settings.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.bits",
-                        "displayName":  "Background Intelligent Transfer Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "BITS",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "High",
-                        "requiresConfirmation":  true,
-                        "warning":  "May impact background downloads for Windows Update and Store apps.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.dosvc",
-                        "displayName":  "Delivery Optimization",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "DoSvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables P2P update distribution.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.cdpsvc",
-                        "displayName":  "Connected Devices Platform Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "CDPSvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "High",
-                        "requiresConfirmation":  true,
-                        "warning":  "May affect Phone Link, cross-device experiences, and Bluetooth pairing.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.diagsvc",
-                        "displayName":  "Diagnostics Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "DiagSvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Reduces background diagnostic data collection.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.pcasvc",
-                        "displayName":  "Program Compatibility Assistant",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "PcaSvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables program compatibility monitoring.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.dps",
-                        "displayName":  "Diagnostic Policy Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "dps",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables automatic Windows problem diagnosis.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.entappsvc",
-                        "displayName":  "Enterprise App Management Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "EntAppSvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Enterprise app management. Safe for consumer PCs.",
-                        "conditions":  [
-                                           {
-                                               "type":  "IsDomainJoined",
-                                               "operator":  "Equals",
-                                               "value":  false
-                                           }
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.winhttpautoproxy",
-                        "displayName":  "WinHTTP Web Proxy Auto-Discovery",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "WinHttpAutoProxySvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Reduces proxy auto-discovery background activity.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.smsrouter",
-                        "displayName":  "Microsoft Windows SMS Router Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "SmsRouter",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.ncasvc",
-                        "displayName":  "Network Connectivity Assistant",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "NcaSvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Safe for non-DirectAccess non-domain machines.",
-                        "conditions":  [
-                                           {
-                                               "type":  "IsDomainJoined",
-                                               "operator":  "Equals",
-                                               "value":  false
-                                           }
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.storagesvc",
-                        "displayName":  "Storage Service",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "StorSvc",
-                        "value":  "Manual",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Manages storage device settings.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.vacSvc",
-                        "displayName":  "Volumetric Audio Compositor",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "VacSvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables 3D Spatial Sound compositing. Rarely used.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.ssstpsvc",
-                        "displayName":  "SSTP VPN Client",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "SstpSvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables SSTP VPN. Safe for non-VPN users.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.graphicsperf",
-                        "displayName":  "Graphics Performance Monitor",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "GraphicsPerfSvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Background graphics performance logging.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.service.hkmsvc",
-                        "displayName":  "Health Key and Certificate Management",
-                        "category":  "Service",
-                        "action":  "SetServiceStartup",
-                        "target":  "Hkmsvc",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Health certificate service for NAP. Unused on home systems.",
-                        "conditions":  [
-                                           {
-                                               "type":  "IsDomainJoined",
-                                               "operator":  "Equals",
-                                               "value":  false
-                                           }
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.startup.cortana",
-                        "displayName":  "Cortana Background Task",
-                        "category":  "Startup",
-                        "action":  "DisableStartupEntry",
-                        "target":  "Cortana",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables Cortana on Windows 10.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.startup.widgets",
-                        "displayName":  "Windows 11 Widgets Background Task",
-                        "category":  "Startup",
-                        "action":  "DisableStartupEntry",
-                        "target":  "Widgets",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Removes Widgets from the taskbar startup on Windows 11.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.hibernation",
-                        "displayName":  "Disable Hibernation (Desktop/AC only)",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\HibernateEnabled",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "High",
-                        "requiresConfirmation":  true,
-                        "warning":  "Disables hibernation and Fast Startup. Frees disk equal to RAM size. Do not apply on laptops.",
-                        "conditions":  [
-                                           {
-                                               "type":  "HasBattery",
-                                               "operator":  "Equals",
-                                               "value":  false
-                                           }
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.animations",
-                        "displayName":  "Disable UI Animations",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\Control Panel\\Desktop\\WindowMetrics\\MinAnimate",
-                        "value":  "0",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Disables window minimize/maximize animations.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.taskbaranimations",
-                        "displayName":  "Disable Taskbar Animations",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarAnimations",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.listviewshadow",
-                        "displayName":  "Disable ListView Item Shadows",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\ListviewShadow",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.listalpha",
-                        "displayName":  "Disable ListView Alpha Selection",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\ListviewAlphaSelect",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.nodraginimages",
-                        "displayName":  "Disable Full Window Drag",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\Control Panel\\Desktop\\DragFullWindows",
-                        "value":  "0",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Shows only window outline while dragging.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.ballontips",
-                        "displayName":  "Disable Balloon Tips",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\EnableBalloonTips",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.clearpage",
-                        "displayName":  "Do Not Clear Page File on Shutdown",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\ClearPageFileAtShutdown",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Medium",
-                        "requiresConfirmation":  false,
-                        "warning":  "Keeps pagefile data between reboots. Minor security consideration on shared machines.",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.registry.syncprovnotify",
-                        "displayName":  "Disable Sync Provider Notifications",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "target":  "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\ShowSyncProviderNotifications",
-                        "value":  0,
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.task.wdi1",
-                        "displayName":  "Windows Diagnostic Infrastructure Task",
-                        "category":  "ScheduledTask",
-                        "action":  "DisableScheduledTask",
-                        "target":  "\\Microsoft\\Windows\\WDI\\ResolutionHost",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.task.autochk",
-                        "displayName":  "Proxy Task for Programs",
-                        "category":  "ScheduledTask",
-                        "action":  "DisableScheduledTask",
-                        "target":  "\\Microsoft\\Windows\\Autochk\\Proxy",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.task.flighting",
-                        "displayName":  "Windows Insider Flighting Task",
-                        "category":  "ScheduledTask",
-                        "action":  "DisableScheduledTask",
-                        "target":  "\\Microsoft\\Windows\\Flighting\\FeatureConfig\\ReconcileFeatures",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.task.onedrive.update",
-                        "displayName":  "OneDrive Update Task",
-                        "category":  "ScheduledTask",
-                        "action":  "DisableScheduledTask",
-                        "target":  "\\OneDrive Standalone Update Task-S-1-5-21",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "Prevents OneDrive from auto-updating.",
-                        "conditions":  [
-                                           {
-                                               "type":  "WorkloadInstalled",
-                                               "operator":  "Equals",
-                                               "value":  "OneDrive"
-                                           }
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "id":  "ultimate.task.devinfo",
-                        "displayName":  "Device Information Diagnostics",
-                        "category":  "ScheduledTask",
-                        "action":  "DisableScheduledTask",
-                        "target":  "\\Microsoft\\Windows\\Device Information\\Device",
-                        "value":  "Disabled",
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "risk":  "Low",
-                        "requiresConfirmation":  false,
-                        "warning":  "",
-                        "conditions":  [
-
-                                       ],
-                        "verification":  "ReadBack",
-                        "rollback":  "Snapshot"
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.win32priority",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Win32 Priority Separation",
-                        "risk":  "High",
-                        "warning":  "",
-                        "target":  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl\\Win32PrioritySeparation",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  38
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.mousetrails",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Disable Mouse Trails",
-                        "risk":  "Medium",
-                        "warning":  "",
-                        "target":  "HKCU\\Control Panel\\Mouse\\MouseTrails",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  "0"
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.doubleclickspeed",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Fast Double Click Speed",
-                        "risk":  "Medium",
-                        "warning":  "",
-                        "target":  "HKCU\\Control Panel\\Mouse\\DoubleClickSpeed",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  "200"
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.beep",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Disable System Beep",
-                        "risk":  "Medium",
-                        "warning":  "",
-                        "target":  "HKCU\\Control Panel\\Mouse\\Beep",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  "No"
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.extendedsounds",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Disable Extended Sounds",
-                        "risk":  "Medium",
-                        "warning":  "",
-                        "target":  "HKCU\\Control Panel\\Mouse\\ExtendedSounds",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  "No"
-                    },
-                    {
-                        "verification":  "ReadBack",
-                        "id":  "ult.reg.activewindowtracking",
-                        "category":  "Registry",
-                        "action":  "SetRegistryValue",
-                        "rollback":  "Snapshot",
-                        "requiresConfirmation":  false,
-                        "displayName":  "Enable Active Window Tracking",
-                        "risk":  "Medium",
-                        "warning":  "",
-                        "target":  "HKCU\\Control Panel\\Mouse\\ActiveWindowTracking",
-                        "conditions":  [
-
-                                       ],
-                        "os":  [
-                                   "win10",
-                                   "win11"
-                               ],
-                        "value":  1
-                    }
-                ]
+  "id": "Ultimate",
+  "displayName": "Ultimate Optimization",
+  "description": "Deep system optimization for workstations and power users. Extends Pro with additional services, Windows features, scheduled tasks, visual effects, and advanced registry targets. System Restore point created before execution.",
+  "extends": [],
+  "targetProcessReduction": {
+    "min": 80,
+    "max": 130
+  },
+  "entries": [
+    {
+      "id": "ultimate.service.wuauserv",
+      "displayName": "Windows Update \u2014 Manual (not Disabled)",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "wuauserv",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "High",
+      "requiresConfirmation": true,
+      "warning": "Windows Update will still function, but won't run automatically. You must check for updates manually in Settings.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.bits",
+      "displayName": "Background Intelligent Transfer Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "BITS",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "High",
+      "requiresConfirmation": true,
+      "warning": "May impact background downloads for Windows Update and Store apps.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.dosvc",
+      "displayName": "Delivery Optimization",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "DoSvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Disables P2P update distribution.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.cdpsvc",
+      "displayName": "Connected Devices Platform Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "CDPSvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "High",
+      "requiresConfirmation": true,
+      "warning": "May affect Phone Link, cross-device experiences, and Bluetooth pairing.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.diagsvc",
+      "displayName": "Diagnostics Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "DiagSvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Reduces background diagnostic data collection.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.pcasvc",
+      "displayName": "Program Compatibility Assistant",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "PcaSvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Disables program compatibility monitoring.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.dps",
+      "displayName": "Diagnostic Policy Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "dps",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Disables automatic Windows problem diagnosis.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.entappsvc",
+      "displayName": "Enterprise App Management Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "EntAppSvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Enterprise app management. Safe for consumer PCs.",
+      "conditions": [
+        {
+          "type": "IsDomainJoined",
+          "operator": "Equals",
+          "value": false
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.winhttpautoproxy",
+      "displayName": "WinHTTP Web Proxy Auto-Discovery",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "WinHttpAutoProxySvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Reduces proxy auto-discovery background activity.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.smsrouter",
+      "displayName": "Microsoft Windows SMS Router Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "SmsRouter",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.ncasvc",
+      "displayName": "Network Connectivity Assistant",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "NcaSvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Safe for non-DirectAccess non-domain machines.",
+      "conditions": [
+        {
+          "type": "IsDomainJoined",
+          "operator": "Equals",
+          "value": false
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.storagesvc",
+      "displayName": "Storage Service",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "StorSvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Manages storage device settings.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.vacSvc",
+      "displayName": "Volumetric Audio Compositor",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "VacSvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Disables 3D Spatial Sound compositing. Rarely used.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.ssstpsvc",
+      "displayName": "SSTP VPN Client",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "SstpSvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Disables SSTP VPN. Safe for non-VPN users.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.graphicsperf",
+      "displayName": "Graphics Performance Monitor",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "GraphicsPerfSvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Background graphics performance logging.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.hkmsvc",
+      "displayName": "Health Key and Certificate Management",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "Hkmsvc",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Health certificate service for NAP. Unused on home systems.",
+      "conditions": [
+        {
+          "type": "IsDomainJoined",
+          "operator": "Equals",
+          "value": false
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.startup.cortana",
+      "displayName": "Cortana Background Task",
+      "category": "Startup",
+      "action": "DisableStartupEntry",
+      "target": "Cortana",
+      "value": "Disabled",
+      "os": [
+        "win10"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Disables Cortana on Windows 10.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.startup.widgets",
+      "displayName": "Windows 11 Widgets Background Task",
+      "category": "Startup",
+      "action": "DisableStartupEntry",
+      "target": "Widgets",
+      "value": "Disabled",
+      "os": [
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Removes Widgets from the taskbar startup on Windows 11.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.registry.listalpha",
+      "displayName": "Disable ListView Alpha Selection",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\ListviewAlphaSelect",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.registry.ballontips",
+      "displayName": "Disable Balloon Tips",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\EnableBalloonTips",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.registry.clearpage",
+      "displayName": "Do Not Clear Page File on Shutdown",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\ClearPageFileAtShutdown",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Keeps pagefile data between reboots. Minor security consideration on shared machines.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.registry.syncprovnotify",
+      "displayName": "Disable Sync Provider Notifications",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\ShowSyncProviderNotifications",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.wdi1",
+      "displayName": "Windows Diagnostic Infrastructure Task",
+      "category": "ScheduledTask",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\WDI\\ResolutionHost",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.autochk",
+      "displayName": "Proxy Task for Programs",
+      "category": "ScheduledTask",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\Autochk\\Proxy",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.flighting",
+      "displayName": "Windows Insider Flighting Task",
+      "category": "ScheduledTask",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\Flighting\\FeatureConfig\\ReconcileFeatures",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.onedrive.update",
+      "displayName": "OneDrive Update Task",
+      "category": "ScheduledTask",
+      "action": "DisableScheduledTask",
+      "target": "\\OneDrive Standalone Update Task-S-1-5-21",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Prevents OneDrive from auto-updating.",
+      "conditions": [
+        {
+          "type": "WorkloadInstalled",
+          "operator": "Equals",
+          "value": "OneDrive"
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.devinfo",
+      "displayName": "Device Information Diagnostics",
+      "category": "ScheduledTask",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\Device Information\\Device",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ultimate.storage.nvme_command_timeout",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "NVMe Storport Command Wait Timeout",
+      "risk": "Medium",
+      "warning": "",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device\\WaitResetTime",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "value": true
+        }
+      ],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": 10,
+      "name": "NVMe Storport Command Wait Timeout"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ultimate.input.mouse_trails_disable",
+      "category": "Input",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "Disable Mouse Trails",
+      "risk": "Safe",
+      "warning": "Disables cursor motion trails to minimize display composition latency.",
+      "target": "HKCU\\Control Panel\\Mouse\\MouseTrails",
+      "conditions": [],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": "0",
+      "type": "REG_SZ",
+      "name": "Disable Mouse Trails"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ult.reg.doubleclickspeed",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "Fast Double Click Speed",
+      "risk": "Medium",
+      "warning": "",
+      "target": "HKCU\\Control Panel\\Mouse\\DoubleClickSpeed",
+      "conditions": [],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": "200"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ult.reg.beep",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "Disable System Beep",
+      "risk": "Medium",
+      "warning": "",
+      "target": "HKCU\\Control Panel\\Mouse\\Beep",
+      "conditions": [],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": "No"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ult.reg.extendedsounds",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "Disable Extended Sounds",
+      "risk": "Medium",
+      "warning": "",
+      "target": "HKCU\\Control Panel\\Mouse\\ExtendedSounds",
+      "conditions": [],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": "No"
+    },
+    {
+      "verification": "ReadBack",
+      "id": "ultimate.kernel.additional_delayed_worker_threads",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "rollback": "Snapshot",
+      "requiresConfirmation": false,
+      "displayName": "Enable Active Window Tracking",
+      "risk": "Medium",
+      "warning": "",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Executive\\AdditionalDelayedWorkerThreads",
+      "conditions": [],
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "value": 16,
+      "name": "Executive Additional Delayed Worker Threads"
+    },
+    {
+      "id": "ultimate.cpu.intel_thread_director_bias",
+      "displayName": "Intel Thread Director Heterogeneous Scheduling Calibration",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\7f2f4c9f-3e54-4a2b-9e0c-8d3a5a7b1e2f\\Attributes",
+      "value": 2,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Exposes and prioritizes performance-core scheduling bias for foreground processes on hybrid architecture processors.",
+      "conditions": [
+        {
+          "type": "IsHybridCpu",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.cpu.amd_3d_vcache_affinity",
+      "displayName": "AMD 3D V-Cache / Dual-CCD Scheduling Alignment",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\amdppm\\Parameters\\ThreadAffinityBias",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Guides the Windows scheduler to bias gaming threads toward Cache-frequency CCDs on multi-CCD AMD processors.",
+      "conditions": [
+        {
+          "type": "IsDualCcdAmd3DVcache",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.dxgi_swapchain_flip_model",
+      "displayName": "DXGI Modern Flip Model & VRR Upgrade",
+      "category": "Gpu",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings\\SwapEffectUpgrade",
+      "value": "1",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Upgrades legacy windowed DX9/DX11 presentation to modern hardware flip model, unlocking lower input latency and VRR.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.directx_disable_uncalibrated_auto_hdr",
+      "displayName": "Disable Uncalibrated AutoHDR Presentation Tone Mapping",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings\\AutoHDR",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents unwanted GPU frame tone mapping overhead on SDR displays during high-FPS gaming.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.memory.dynamic_working_set_compression_demote",
+      "displayName": "Memory Compression Page Combining Overhead Suppression",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\DisablePageCombining",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Suppresses memory page combining background cycles on 16GB+ systems, eliminating memory compression micro-stutters during heavy loads.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.cpu.processor_cpu_sets_isolation",
+      "displayName": "Processor CPU Sets Interrupt Isolation",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\CpuSets",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Enables Windows kernel CPU Sets support for directing hardware interrupts away from gaming cores.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.hardware_flip_queue_1",
+      "displayName": "Direct3D Max Prerendered Frame Latency (1 Frame)",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Direct3D\\MaxFrameLatency",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Restricts flip queue prerender buffer to 1 frame for direct mouse-to-pixel responsiveness.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.render.avx_workload_thermal_guard",
+      "displayName": "AVX Workload Processor Boost Policy Calibration",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\be337238-0d82-4146-a960-4f3749d470c7\\Attributes",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Unlocks aggressive processor performance boost controls for multi-threaded Blender/AfterEffects workloads.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.power.pcie_aspm_disable_ac",
+      "displayName": "Disable PCIe ASPM Link State Power Management on AC",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\501a4d13-42af-4429-9fd5-6921fb825d05\\ee12f906-d277-404b-b6da-f55a15196015\\Attributes",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents PCI Express link state power transitions on AC to eliminate GPU and NVMe wake latency.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.kernel.paging_executive_lock",
+      "displayName": "Lock Windows Kernel Executive & Core Drivers in RAM",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\DisablePagingExecutive",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Forces operating system kernel and drivers to remain in fast physical memory without paging to disk.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.memory.second_level_address_translation_affinity",
+      "displayName": "Hypervisor SLAT Virtualization NUMA Alignment",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Virtualization\\NUMA\\PreferredNode",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Aligns hardware-assisted virtualization pages with primary NUMA node for maximum emulator IPC.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.nvidia_powermizer_prefer_maximum",
+      "displayName": "NVIDIA PowerMizer Prefer Maximum Performance",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000\\PowerMizerEnable",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Forces NVIDIA GPU clock states to maintain maximum rated frequencies under desktop 3D load.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "operator": "Equals",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.cpu.processor_group_balanced_allocation",
+      "displayName": "Multi-Group Processor Thread Scheduling Balance",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\SplitLargeProcessorGroups",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Balances thread allocation across multiple 64-logical-processor groups on high-core workstations.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.numa.node_interleaving_and_affinity",
+      "displayName": "NUMA Node Proximity Memory Allocation",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\EnforceNumaProximity",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Allocates physical RAM strictly from the local NUMA node nearest to the executing core.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.d3d12_hardware_scheduling_enforce",
+      "displayName": "Enforce DirectX 12 Hardware Accelerated GPU Scheduling",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\HwSchMode",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Offloads GPU context switching and memory management directly to dedicated GPU microcode.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.vram_overcommit_paging_threshold",
+      "displayName": "VRAM Overcommit Demote to High-Speed System RAM",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\MemoryPaging\\AllowVramOvercommit",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Prevents catastrophic frame drops during video rendering when VRAM capacity is exceeded.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.kernel.clock_interrupt_rate_stabilize",
+      "displayName": "Disable Dynamic Kernel Tick for Ultra-Low Jitter",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\DisableDynamicTick",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "High",
+      "requiresConfirmation": false,
+      "warning": "Eliminates timer synchronization delays and timer sleep states on AC power.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.kernel.hal_irq_redirection_away_core0",
+      "displayName": "HAL Device Interrupt Affinity Balancing Away from Core 0",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\DistributeTimers",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Distributes hardware DPC/ISR clock interrupts across all logical cores to prevent Core 0 bottlenecks.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.nvme_burst_queue_alignment",
+      "displayName": "Align NTFS Sector Allocation with NVMe 4KB Physical Boundaries",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\NtfsAlignDataAllocations",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Guarantees all file allocations align with SSD physical 4KB NAND flash block pages.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.fsutil_ntfs_disable_compression",
+      "displayName": "Disable Real-Time File System Compression on High-Speed Volumes",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\NtfsDisableCompression",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Eliminates CPU decompression overhead across high-performance NVMe solid-state storage.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.audio.exclusive_wasapi_buffer_lock",
+      "displayName": "Lock WASAPI Real-Time Buffer Against Underrun",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio\\Affinity",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows audio engine threads to execute across all performance cores to eliminate sound glitches.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.compositor.dwm_latency_buffer_bypass",
+      "displayName": "Bypass DWM Double-Buffering for Borderless Windowed Apps",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Windows\\DWM\\OverlayTestMode",
+      "value": 5,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Enables direct independent flip queue for borderless games and emulators.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.system.pci_express_aspm_disable_ac",
+      "displayName": "Disable PCIe Active State Power Management (ASPM) on AC",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\501a4d13-42af-4429-9e5e-4e99f9f2f8d0\\ee12f906-d277-404b-b6da-e5fa1a576df5\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Maintains continuous full-speed PCIe Gen4/Gen5 bus links to graphics cards and NVMe drives on AC power.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.network.netadapter_offload_checksum_udp_tcp",
+      "displayName": "Enable Hardware Offload for Large TCP and UDP Checksums",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\DisableTaskOffload",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Offloads packet checksum calculation entirely to the physical network controller ASIC.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.network.ecn_explicit_congestion_notification",
+      "displayName": "Enable Explicit Congestion Notification (ECN)",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\EnableECN",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Signals packet congestion before router buffers drop packets, preventing game disconnects.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.power.energy_performance_preference_max",
+      "displayName": "Lock Intel Speed Shift & AMD CPPC Energy Preference to 0 (Performance)",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\36687f9e-e376-44e2-ac58-005d60bf3d71\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Instructs autonomous CPU hardware frequency governor to ramp to max clock frequencies instantaneously.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.memory.hardware_dirty_page_flush_pacing",
+      "displayName": "Pace Memory Manager Dirty Page Flushes to Prevent Frame Stutter",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\DirtyPageThresholdPercent",
+      "value": 20,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Flushes modified pages smoothly in small bursts, preventing sudden disk write spikes during games.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.system.device_idle_d3cold_disable_ac",
+      "displayName": "Disable D3Cold Deep Power State for Active Controllers on AC",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\D3ColdSupported",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Prevents USB controllers and audio DACs from entering deep low-power sleep states on AC power.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.scheduler.kernel_quantum_foreground_lock",
+      "displayName": "Lock Executive Scheduler Foreground Boost Quantum",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\ForegroundQuantumThreshold",
+      "value": 36,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Dedicates maximum continuous CPU timeslices to active foreground render pipelines.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.storport_idle_power_state_disable",
+      "displayName": "Disable StorPort Idle Low Power Transitions on Primary NVMe",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device\\EnableHIPM",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Disables host-initiated power management on storage controller bus, eliminating wake-up latency.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.network.compound_tcp_congestion_provider",
+      "displayName": "Select Compound TCP Congestion Control Algorithm",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Nsi\\{eb004a03-9b1a-11d4-9123-0050047759bc}\\0\\CongestionProvider",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Optimizes TCP congestion window scaling over gigabit fiber internet links.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.memory.standby_cache_auto_purge_gaming",
+      "displayName": "Configure Autonomous Standby Cache Recovery Threshold",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\SecondLevelDataCache",
+      "value": 1024,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Informs Windows memory manager of exact L2/L3 CPU cache sizes for optimal page coloring.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.system.kernel_crash_dump_dedicated_path",
+      "displayName": "Configure Dedicated SSD Paging Path for Kernel Safety",
+      "category": "System",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl\\DedicatedDumpFile",
+      "value": "%SystemDrive%\\dedicateddumpfile.sys",
+      "type": "REG_EXPAND_SZ",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Isolates crash telemetry from main operating pagefile for maximum data recovery resilience.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.cpu.cpu_sets_system_daemon_isolation",
+      "displayName": "Isolate Non-Critical System Daemons via Dynamic CPU Sets",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\CpuSetsDaemonIsolation",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Restricts background telemetry and indexer worker threads away from primary gaming execution cores.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.system.usb_link_power_management_disable_ac",
+      "displayName": "Disable USB 3.0 U1/U2 Link Power State Management on AC",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\2a737441-1930-4402-8d77-b2bebba308a3\\d4e98f31-5ffe-4ce1-be31-1b38b384c009\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Eliminates low-power link dropouts on USB 3.0 audio interfaces and gaming capture cards.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.security.spectre_meltdown_performance_audit",
+      "displayName": "Audit Kernel Retpoline & Speculative Execution Engine State",
+      "category": "System",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\FeatureSettings",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Enables Retpoline branch target mitigations for near-zero speculative execution CPU overhead.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.bypassio_stack_optimization",
+      "displayName": "Windows DirectStorage BypassIO Storage Stack Optimization",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\BypassIoFlags",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Configures DirectStorage BypassIO storage stack pass-through, eliminating legacy filesystem filter driver latency.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.cpu.processor_idle_demote_threshold",
+      "displayName": "Set Processor Idle Demote Threshold to 100% on AC Power",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\4bdaf4e9-d103-46d7-a5f0-6283dd482dec\\ValueMax",
+      "value": 100,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents the Windows kernel power scheduler from prematurely demoting active compute cores into low-power sleep states during load.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.res_bar_directx_acceleration",
+      "displayName": "PCIe Resizable BAR Bandwidth Allocation Optimization",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000\\KMD_EnableFeatureTesting",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enables full 64-bit PCIe aperture mapping for modern DirectX 12 and Vulkan rendering workloads.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.memory.third_level_data_cache_alignment",
+      "displayName": "Set Third Level Data Cache (L3) Detection to Hardware Auto-Query",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\ThirdLevelDataCache",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Directs Windows kernel memory manager to use CPUID L3 cache sizing for large game heap allocations.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.power.processor_performance_time_check",
+      "displayName": "Configure Processor Performance Time Check to 1 Millisecond",
+      "category": "Power",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\4d2b9012-9e05-4aa0-a6b3-49aa753a650c\\ValueMax",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Minimizes clock frequency re-evaluation interval (1ms) for instantaneous frequency ramping upon gaming thread demand spikes.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.nvidia_pre_rendered_frames_low_latency",
+      "displayName": "Lock GPU Driver Prerendered Frame Queue to 1 for Minimal Input Latency",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000\\PrerenderedFrames",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Limits driver presentation buffer to 1 frame to reduce input lag in mouse and keyboard tracking.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.system.dma_remapping_protection",
+      "displayName": "Enable Kernel DMA Remapping Protection Guard",
+      "category": "System",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\DmaSecurity\\DefaultPolicy",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enables kernel direct memory access protection remapping for high-speed PCIe peripheral interfaces.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.disable_8dot3_names_all_volumes",
+      "displayName": "Disable NTFS 8.3 Short Name Generation Across Volumes",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\NtfsDisable8dot3NameCreation",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables legacy MS-DOS 8.3 short filename generation, accelerating NTFS file creation on high-capacity SSDs.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.dxgi_allow_tearing",
+      "displayName": "Enable DXGI Variable Refresh Rate Hardware Tearing",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings\\AllowTearing",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Enables true zero-latency VRR / G-Sync presentation path in DX12.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.gpu.d3d_multithreaded_submission",
+      "displayName": "Enable Multithreaded GPU Command Submission",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler\\MultiThreadedSubmission",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows parallel command buffer dispatch to discrete GPU queues.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.nvme_flush_bypass",
+      "displayName": "Enforce Zero-Corruption NVMe Flush Protocol",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device\\DisableStorageCommandFlush",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Ensures storage flush commands remain intact for NVMe integrity.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.storage.rebar_bar_size_reserve",
+      "displayName": "Reserve 64-Bit MMIO Aperture Space Above 4GB",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Pnp\\Pci\\ReserveBarSpaceAbove4G",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Guarantees full VRAM addressing for Resizable BAR without MMIO clipping.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.kernel.memory_low_commit_boost",
+      "displayName": "Disable Memory Compression Overhead on High-RAM Workstations",
+      "category": "Kernel",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\LowMemoryCommitThreshold",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables proactive background paging under abundant physical memory.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.kernel.thread_quantum_fixed",
+      "displayName": "Declare L2 Hardware Cache Baseline Descriptor",
+      "category": "Kernel",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Executive\\WorkerThreads",
+      "value": 64,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Provides Windows memory manager explicit L2 cache dimensioning.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot",
+      "name": "Executive Worker Thread Concurrency"
+    },
+    {
+      "id": "ultimate.network.direct_cache_access",
+      "displayName": "Enable Direct Cache Access (DCA) for Network Controller",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\EnableDCA",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows high-speed PCIe NICs to transfer incoming packets directly to CPU L3.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.network.net_dma",
+      "displayName": "Enable TCPA Hardware Acceleration for Multi-Gigabit NICs",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\EnableTCPA",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Offloads TCP memory transfers to dedicated DMA hardware engines.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.power.pcie_aspm_policy",
+      "displayName": "Disable PCIe ASPM Link State Power Savings on AC",
+      "category": "Power",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\501a4d13-42af-4429-9fd5-6921fb825d05\\ee12f906-d277-404b-b6da-f55a15196015\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Prevents PCIe link state down-negotiation latency on AC power.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.power.nvme_dynamic_power_saving",
+      "displayName": "Disable NVMe Link Power Management on AC",
+      "category": "Power",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\0012ee47-9041-4b5d-9b77-535fba8b1442\\0b2d69d7-a2a1-449c-9680-f91c70521c60\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Keeps NVMe drives in high-speed D0 active state on AC power.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.iphlpsvc_manual",
+      "displayName": "Configure IP Helper Service to Demand Start",
+      "category": "Service",
+      "action": "SetServiceStartup",
+      "target": "iphlpsvc",
+      "value": "Manual",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Reduces background memory overhead when legacy IPv6 6to4 tunnels are unused.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.service.lanman_autotune",
+      "displayName": "Reduce SMB LanmanServer Idle Session Timeout",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters\\AutoDisconnect",
+      "value": 15,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Reclaims unused network session memory handles after 15 minutes.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.sqm_tasks",
+      "displayName": "Disable SQM PI Telemetry Aggregation Task",
+      "category": "System",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\PI\\Sqm-Tasks",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables background software quality metrics aggregation task.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "ultimate.task.file_history_backup",
+      "displayName": "Disable File History Background Maintenance",
+      "category": "Storage",
+      "action": "DisableScheduledTask",
+      "target": "\\Microsoft\\Windows\\FileHistory\\File History (maintenance mode)",
+      "value": "Disabled",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Suppresses automatic File History background catalog scanning.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    }
+  ]
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using BiosOptimizer.Core.Implementations.Diagnostics;
@@ -18,7 +19,7 @@ namespace BiosOptimizer.Core.Implementations.Startup
         private static readonly Lazy<WindowsStartupRegistrar> _instance = new(() => new WindowsStartupRegistrar());
         public static WindowsStartupRegistrar Instance => _instance.Value;
 
-        public const string AuthoritativeEntryName = "Error Optimizer";
+        public const string AuthoritativeEntryName = "ERROR OPTIMIZER V4";
         private const string RunRegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string RunOnceRegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\RunOnce";
         private const string StartupApprovedRunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -26,6 +27,10 @@ namespace BiosOptimizer.Core.Implementations.Startup
 
         private static readonly string[] LegacyDuplicateNames = new[]
         {
+            "ERROR OPTIMIZER PROTOTYPE",
+            "Error Optimizer Prototype",
+            "Error Optimizer",
+            "Error Optimizer V4",
             "Error Optimizer Startup",
             "Error Optimizer Startup 2",
             "Error Optimizer (1)",
@@ -70,6 +75,44 @@ namespace BiosOptimizer.Core.Implementations.Startup
             }
             catch { }
             return sids;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WTSGetActiveConsoleSessionId();
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        public static string GetActiveConsoleSessionSid()
+        {
+            try
+            {
+                uint consoleSessionId = WTSGetActiveConsoleSessionId();
+                if (consoleSessionId == 0xFFFFFFFF) return "";
+
+                foreach (var proc in Process.GetProcessesByName("explorer"))
+                {
+                    try
+                    {
+                        if ((uint)proc.SessionId == consoleSessionId)
+                        {
+                            if (OpenProcessToken(proc.Handle, 0x0008 /* TOKEN_QUERY */, out IntPtr hToken))
+                            {
+                                using var winId = new WindowsIdentity(hToken);
+                                CloseHandle(hToken);
+                                return winId.User?.Value ?? "";
+                            }
+                        }
+                    }
+                    catch { }
+                    finally { proc.Dispose(); }
+                }
+            }
+            catch { }
+            return "";
         }
 
         public static bool CheckPolicyBlocking(out string reason)
@@ -225,7 +268,73 @@ namespace BiosOptimizer.Core.Implementations.Startup
             return true;
         }
 
-        public bool ConfigureStartup(bool enable, bool startMinimized = false)
+        public sealed record StartupTransactionResult(
+            bool Success,
+            bool IsEnabled,
+            bool StartMinimized,
+            string? ExePath,
+            string? ErrorMessage,
+            WindowsStartupInfo Info);
+
+        public StartupTransactionResult ConfigureStartupTransactional(
+            bool enable,
+            bool startMinimized,
+            string? preferredExePath = null)
+        {
+            var priorSettings = BiosOptimizer.Core.Implementations.Config.UnifiedSettingsStore.LoadSafe();
+            var priorInfo = GetStartupInfo();
+            string resolvedExe = ResolveInstalledOrLocalExePath(preferredExePath ?? priorSettings.HostExecutablePath);
+
+            if (enable && !IsValidDesktopExecutablePath(resolvedExe))
+            {
+                string err = "Startup registration failed: valid desktop executable path could not be resolved.";
+                AuditLogManager.Write("Startup", "ConfigureStartup", "Failed", err);
+                return new StartupTransactionResult(false, priorInfo.IsEnabled, priorSettings.StartMinimized, priorInfo.ExePath, err, priorInfo);
+            }
+
+            bool configured = ConfigureStartup(enable, startMinimized, string.IsNullOrWhiteSpace(resolvedExe) ? preferredExePath : resolvedExe);
+            var afterInfo = GetStartupInfo();
+
+            if (!configured || afterInfo.Status == WindowsStartupRegistrationStatus.BlockedByPolicy || afterInfo.IsEnabled != enable)
+            {
+                // Best-effort rollback of registry mutation so OS state and persisted config stay aligned
+                try
+                {
+                    if (priorInfo.Status != WindowsStartupRegistrationStatus.BlockedByPolicy)
+                    {
+                        ConfigureStartup(priorInfo.IsEnabled, priorSettings.StartMinimized, priorSettings.HostExecutablePath);
+                    }
+                }
+                catch { }
+
+                var rolledBackInfo = GetStartupInfo();
+                string err = !string.IsNullOrWhiteSpace(afterInfo.DetailMessage)
+                    ? afterInfo.DetailMessage
+                    : (afterInfo.Status == WindowsStartupRegistrationStatus.BlockedByPolicy
+                        ? "Windows Group Policy blocks startup registration."
+                        : "Registry read-back verification failed after startup update.");
+                AuditLogManager.Write("Startup", "ConfigureStartup", "Failed", err);
+                return new StartupTransactionResult(false, rolledBackInfo.IsEnabled, priorSettings.StartMinimized, rolledBackInfo.ExePath, err, rolledBackInfo);
+            }
+
+            // Persist settings ONLY after verified registry commit
+            priorSettings.StartWithWindows = afterInfo.IsEnabled;
+            priorSettings.StartMinimized = startMinimized;
+            if (IsValidDesktopExecutablePath(resolvedExe))
+            {
+                priorSettings.HostExecutablePath = resolvedExe;
+            }
+            var saved = BiosOptimizer.Core.Implementations.Config.UnifiedSettingsStore.Save(priorSettings);
+
+            AuditLogManager.Write("Startup", "ConfigureStartup", "OK",
+                $"Verified startup registration enabled={saved.StartWithWindows}, minimized={saved.StartMinimized}, exe='{resolvedExe}'.");
+            return new StartupTransactionResult(true, saved.StartWithWindows, saved.StartMinimized, afterInfo.ExePath, null, afterInfo);
+        }
+
+        public bool ConfigureStartup(bool enable, bool startMinimized = true)
+            => ConfigureStartup(enable, startMinimized, null);
+
+        public bool ConfigureStartup(bool enable, bool startMinimized, string? preferredExePath)
         {
             try
             {
@@ -245,7 +354,7 @@ namespace BiosOptimizer.Core.Implementations.Startup
                             using var userRoot = Registry.Users.OpenSubKey(sid, true);
                             if (userRoot != null)
                             {
-                                if (ConfigureUserHive(userRoot, enable, startMinimized))
+                                if (ConfigureUserHive(userRoot, enable, startMinimized, preferredExePath))
                                 {
                                     anySidSuccess = true;
                                 }
@@ -257,7 +366,7 @@ namespace BiosOptimizer.Core.Implementations.Startup
                 else
                 {
                     // Running under interactive user session: configure CurrentUser directly
-                    cuSuccess = ConfigureUserHive(Registry.CurrentUser, enable, startMinimized);
+                    cuSuccess = ConfigureUserHive(Registry.CurrentUser, enable, startMinimized, preferredExePath);
                 }
 
                 bool finalSuccess = cuSuccess || anySidSuccess;
@@ -269,7 +378,9 @@ namespace BiosOptimizer.Core.Implementations.Startup
                     isBlocked: info.Status == WindowsStartupRegistrationStatus.BlockedByPolicy,
                     blockedReason: info.Status == WindowsStartupRegistrationStatus.BlockedByPolicy ? info.DetailMessage : "");
 
-                return finalSuccess;
+                return finalSuccess &&
+                    info.Status != WindowsStartupRegistrationStatus.BlockedByPolicy &&
+                    info.IsEnabled == enable;
             }
             catch
             {
@@ -277,7 +388,7 @@ namespace BiosOptimizer.Core.Implementations.Startup
             }
         }
 
-        private static bool ConfigureUserHive(RegistryKey rootKey, bool enable, bool startMinimized)
+        private static bool ConfigureUserHive(RegistryKey rootKey, bool enable, bool startMinimized, string? preferredExePath = null)
         {
             try
             {
@@ -300,12 +411,12 @@ namespace BiosOptimizer.Core.Implementations.Startup
                         approvedKey.SetValue(AuthoritativeEntryName, disabledVal, RegistryValueKind.Binary);
                     }
 
-                    return true;
+                    return runKey.GetValue(AuthoritativeEntryName) == null;
                 }
 
-                // Determine current installed/running executable path
-                string exePath = ResolveInstalledOrLocalExePath();
-                if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                // Determine current installed/running desktop executable path (never BiosOptimizer.Service.exe)
+                string exePath = ResolveInstalledOrLocalExePath(preferredExePath);
+                if (!IsValidDesktopExecutablePath(exePath))
                 {
                     return false;
                 }
@@ -341,14 +452,57 @@ namespace BiosOptimizer.Core.Implementations.Startup
             }
         }
 
-        public static string ResolveInstalledOrLocalExePath()
+        private static bool IsValidDesktopExecutablePath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+            if (!path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                return false;
+            string fileName = Path.GetFileName(path);
+            if (fileName.Equals("BiosOptimizer.Service.exe", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals("BiosOptimizer.CLI.exe", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return true;
+        }
+
+        public static string ResolveInstalledOrLocalExePath(string? preferredExePath = null)
         {
             try
             {
-                // 1. Check HKLM 64-bit Registry Install Location from Inno Setup
+                if (IsValidDesktopExecutablePath(preferredExePath))
+                {
+                    return preferredExePath!;
+                }
+
+                // 0. Check UnifiedSettingsStore persisted HostExecutablePath (set by PrototypeHost)
+                try
+                {
+                    string? storedHost = BiosOptimizer.Core.Implementations.Config.UnifiedSettingsStore.LoadSafe().HostExecutablePath;
+                    if (IsValidDesktopExecutablePath(storedHost))
+                        return storedHost!;
+                }
+                catch { }
+
+                // 0b. Check ERROR OPTIMIZER PROTOTYPE.exe beside current binary OR parent dir (e.g., core\BiosOptimizer.Service.exe)
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string baseProto = Path.Combine(baseDir, "ERROR OPTIMIZER PROTOTYPE.exe");
+                if (File.Exists(baseProto))
+                    return baseProto;
+
+                DirectoryInfo? parentDir = Directory.GetParent(baseDir);
+                if (parentDir != null)
+                {
+                    string parentProto = Path.Combine(parentDir.FullName, "ERROR OPTIMIZER PROTOTYPE.exe");
+                    if (File.Exists(parentProto))
+                        return parentProto;
+                }
+
+                // 1. Check HKLM 64-bit Registry Install Location from Inno Setup (current + legacy keys)
                 using (var hklmBase64 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
                 {
-                    using (var hklmKey = hklmBase64.OpenSubKey(@"Software\Error Optimizer V3", false) ??
+                    using (var hklmKey = hklmBase64.OpenSubKey(@"Software\Error Optimizer", false) ??
+                                         hklmBase64.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Error Optimizer_is1", false) ??
+                                         hklmBase64.OpenSubKey(@"Software\Error Optimizer V3", false) ??
                                          hklmBase64.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Error Optimizer V3_is1", false))
                     {
                         if (hklmKey != null)
@@ -356,10 +510,25 @@ namespace BiosOptimizer.Core.Implementations.Startup
                             string? installLoc = (hklmKey.GetValue("InstallLocation") ?? hklmKey.GetValue("Inno Setup: App Path")) as string;
                             if (!string.IsNullOrWhiteSpace(installLoc))
                             {
-                                string targetExe = Path.Combine(installLoc, "ErrorOptimizer.exe");
-                                if (File.Exists(targetExe))
+                                string protoExe = Path.Combine(installLoc.Trim().Trim('"'), "ERROR OPTIMIZER PROTOTYPE.exe");
+                                if (File.Exists(protoExe))
+                                    return protoExe;
+
+                                string legacyExe = Path.Combine(installLoc.Trim().Trim('"'), "ErrorOptimizer.exe");
+                                if (File.Exists(legacyExe))
+                                    return legacyExe;
+                            }
+
+                            string? servicePath = hklmKey.GetValue("ServicePath") as string;
+                            if (!string.IsNullOrWhiteSpace(servicePath))
+                            {
+                                string? svcDir = Path.GetDirectoryName(servicePath.Trim().Trim('"'));
+                                string? appDir = svcDir != null ? Directory.GetParent(svcDir)?.FullName : null;
+                                if (!string.IsNullOrWhiteSpace(appDir))
                                 {
-                                    return targetExe;
+                                    string protoFromSvc = Path.Combine(appDir, "ERROR OPTIMIZER PROTOTYPE.exe");
+                                    if (File.Exists(protoFromSvc))
+                                        return protoFromSvc;
                                 }
                             }
                         }
@@ -368,6 +537,12 @@ namespace BiosOptimizer.Core.Implementations.Startup
 
                 // 2. Check standard 64-bit Program Files installation path
                 string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                string pfProtoV4 = Path.Combine(progFiles, "Error Optimizer V4", "ERROR OPTIMIZER PROTOTYPE.exe");
+                if (File.Exists(pfProtoV4)) return pfProtoV4;
+                string pfProto = Path.Combine(progFiles, "Error Optimizer", "ERROR OPTIMIZER PROTOTYPE.exe");
+                if (File.Exists(pfProto))
+                    return pfProto;
+
                 string pfExe = Path.Combine(progFiles, "Error Optimizer V3", "ErrorOptimizer.exe");
                 if (File.Exists(pfExe))
                 {
@@ -404,8 +579,9 @@ namespace BiosOptimizer.Core.Implementations.Startup
 
                 // 5. Current executing process path
                 string currentPath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "";
-                if (!string.IsNullOrWhiteSpace(currentPath) && 
-                    Path.GetFileName(currentPath).Equals("ErrorOptimizer.exe", StringComparison.OrdinalIgnoreCase) && 
+                if (!string.IsNullOrWhiteSpace(currentPath) &&
+                    (Path.GetFileName(currentPath).Equals("ERROR OPTIMIZER PROTOTYPE.exe", StringComparison.OrdinalIgnoreCase) ||
+                     Path.GetFileName(currentPath).Equals("ErrorOptimizer.exe", StringComparison.OrdinalIgnoreCase)) &&
                     File.Exists(currentPath))
                 {
                     return currentPath;
@@ -418,7 +594,7 @@ namespace BiosOptimizer.Core.Implementations.Startup
                     return baseDirExe;
                 }
 
-                if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
+                if (IsValidDesktopExecutablePath(currentPath))
                 {
                     return currentPath;
                 }

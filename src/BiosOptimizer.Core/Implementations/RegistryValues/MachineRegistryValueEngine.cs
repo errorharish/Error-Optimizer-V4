@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using BiosOptimizer.Core.Common;
 using Microsoft.Win32;
 
 namespace BiosOptimizer.Core.Implementations.RegistryValues
@@ -46,6 +47,13 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
         public double AfterSvchostMemoryMb { get; set; }
         public string Effectiveness { get; set; } = "UNKNOWN";
         public string StatusMessage { get; set; } = string.Empty;
+        public int SvchostCount { get; set; }
+        public double SvchostMemoryMb { get; set; }
+        public double DetectedInstalledRamGb { get; set; }
+        public double DetectedUsableRamGb { get; set; }
+        public long RecommendedRamTierGb { get; set; }
+        public long RecommendedSplitThresholdKb { get; set; }
+        public long? CurrentSplitThresholdKb { get; set; }
     }
 
     public class RegistryValueSnapshot
@@ -70,9 +78,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
         private static readonly Lazy<MachineRegistryValueEngine> _lazy = new(() => new MachineRegistryValueEngine());
         public static MachineRegistryValueEngine Instance => _lazy.Value;
 
-        private static string SnapshotDirectory => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ErrorOptimizer", "RegistryValues");
+        private static string SnapshotDirectory => AppEnvironment.ResolveWritableDataDirectory("RegistryValues");
 
         private static string SnapshotFile => Path.Combine(SnapshotDirectory, "RegistryValueSnapshots.json");
 
@@ -84,6 +90,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
             { 16L,  0x01000000 }, // 16,777,216 KB
             { 24L,  0x01800000 }, // 25,165,824 KB
             { 32L,  0x02000000 }, // 33,554,432 KB
+            { 48L,  0x03000000 }, // 50,331,648 KB
             { 64L,  0x04000000 }, // 67,108,864 KB
             { 96L,  0x06000000 }, // 100,663,296 KB
             { 128L, 0x08000000 }  // 134,217,728 KB
@@ -136,7 +143,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
             const string valName = "SvcHostSplitThresholdInKB";
             const string itemId = "val.svchost.split_threshold";
 
-            double ramGb = profile.RamTotalGb;
+            double ramGb = profile.InstalledRamGb > 0 ? profile.InstalledRamGb : profile.RamTotalGb;
             long matchedTier = CalculateNearestRamTier(ramGb, out string tierReason);
             uint candidateDword = _ramToCandidateMapping[matchedTier];
             long candidateKb = candidateDword;
@@ -155,14 +162,20 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                 ValueType = RegistryValueKind.DWord,
                 Purpose = "Configures the per-process memory threshold for Windows Service Host (svchost.exe). Allows systems with ample RAM to isolate background services for greater reliability and fault isolation, or group them on constrained systems to reduce overhead.",
                 RiskLevel = "MEDIUM",
-                HardwareEvidence = $"Physical RAM: {ramGb:F1} GB | Active svchost count: {svchostCount} | Total svchost Memory: {svchostMemoryMb:F1} MB | Windows: {profile.WindowsVersion}",
+                HardwareEvidence = $"Installed RAM: {ramGb:F1} GB ({profile.RamTotalGb:F1} GB Usable) | Active svchost count: {svchostCount} | Total svchost Memory: {svchostMemoryMb:F1} MB | Windows: {profile.WindowsVersion}",
                 WhyApplicable = $"Configured specifically for your {matchedTier} GB RAM hardware profile. {tierReason}",
                 CandidateValueDisplay = $"0x{candidateDword:X8} ({candidateKb:N0} KB)",
                 CandidateValueRaw = candidateDword,
                 CandidateExplanation = $"Machine-specific candidate calculated for {matchedTier} GB RAM ({candidateKb:N0} KB). Actual impact must be verified after Windows restart.",
                 RequiresRestart = true,
                 BeforeSvchostCount = svchostCount,
-                BeforeSvchostMemoryMb = svchostMemoryMb
+                BeforeSvchostMemoryMb = svchostMemoryMb,
+                SvchostCount = svchostCount,
+                SvchostMemoryMb = svchostMemoryMb,
+                DetectedInstalledRamGb = Math.Round(ramGb, 1),
+                DetectedUsableRamGb = Math.Round(profile.RamTotalGb, 1),
+                RecommendedRamTierGb = matchedTier,
+                RecommendedSplitThresholdKb = candidateKb
             };
 
             // Read live registry value
@@ -177,6 +190,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                     {
                         item.CurrentValueRaw = raw;
                         long currentVal = Convert.ToInt64(raw);
+                        item.CurrentSplitThresholdKb = currentVal;
                         item.CurrentValueDisplay = $"0x{currentVal:X8} ({currentVal:N0} KB)";
 
                         if (currentVal == candidateDword)
@@ -310,8 +324,8 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
             const string valName = "SystemResponsiveness";
             const string itemId = "val.mmcss.system_responsiveness";
 
-            uint candidateDword = profile.CpuLogicalCores >= 8 ? 0x00000000u : 0x0000000Au; // 0% or 10% reserved
-            string candidateDesc = profile.CpuLogicalCores >= 8 ? "0x00000000 (0% Background Reservation / Max Game Throughput)" : "0x0000000A (10% Balanced Background Reservation)";
+            uint candidateDword = 0x0000000Au; // Lowest documented effective setting: 10% reserved, 90% quota (values < 10 clamp to 20)
+            string candidateDesc = "0x0000000A (10% Documented Background Reservation / 90% Multimedia Quota)";
 
             var item = new MachineRegistryValueItem
             {
@@ -325,7 +339,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                 Purpose = "Controls the percentage of CPU execution time reserved by Windows for low-priority background tasks during gaming and multimedia playback.",
                 RiskLevel = "LOW",
                 HardwareEvidence = $"CPU Logical Cores: {profile.CpuLogicalCores} | Total RAM: {profile.RamTotalGb:F1} GB",
-                WhyApplicable = profile.CpuLogicalCores >= 8 ? "High core count allows 0% background throttling without risking UI starvation." : "Multi-core processor handles 10% balanced background reservation cleanly.",
+                WhyApplicable = "Windows default reserves 20% for background tasks. Setting 10 allocates up to 90% for multimedia and gaming while safely preserving background services.",
                 CandidateValueDisplay = candidateDesc,
                 CandidateValueRaw = candidateDword,
                 CandidateExplanation = "Reduces micro-stutter by preventing background tasks from stealing cycles from priority gaming and rendering threads.",
@@ -375,8 +389,12 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
             const string valName = "IoPageLockLimit";
             const string itemId = "val.memory.io_page_lock_limit";
 
-            // 1/8th of RAM in bytes up to 512MB
-            uint candidateBytes = profile.RamTotalGb >= 16.0 ? 536870912u : (uint)(profile.RamTotalGb * 1024 * 1024 * 1024 / 16);
+            double ramGb = profile.InstalledRamGb > 0 ? profile.InstalledRamGb : profile.RamTotalGb;
+            uint candidateBytes = ramGb >= 15.0
+                ? 536870912u // 512 MB cap on >=16 GB systems
+                : ramGb >= 11.0
+                    ? 402653184u // 384 MB on 12 GB systems
+                    : 268435456u; // 256 MB on <=8 GB systems
             string candidateDesc = $"0x{candidateBytes:X8} ({candidateBytes / (1024 * 1024)} MB Buffer)";
 
             var item = new MachineRegistryValueItem
@@ -390,8 +408,8 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                 ValueType = RegistryValueKind.DWord,
                 Purpose = "Sets the maximum number of bytes that can be locked for I/O operations simultaneously in memory buffers.",
                 RiskLevel = "MEDIUM",
-                HardwareEvidence = $"Physical Memory: {profile.RamTotalGb:F1} GB | Storage: {profile.StorageType}",
-                WhyApplicable = $"Calculated proportionally for {profile.RamTotalGb:F1} GB RAM to accelerate large block NVMe/SSD disk transfers.",
+                HardwareEvidence = $"Installed Memory: {ramGb:F1} GB ({profile.RamTotalGb:F1} GB Usable) | Storage: {profile.StorageType}",
+                WhyApplicable = $"Calculated proportionally for {ramGb:F1} GB RAM to accelerate large block NVMe/SSD disk transfers.",
                 CandidateValueDisplay = candidateDesc,
                 CandidateValueRaw = candidateBytes,
                 CandidateExplanation = "Enlarges direct I/O page buffer pool for high-speed disk operations and large texture streaming.",
@@ -458,6 +476,61 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                     item.StatusMessage = "Value applied. Restart required for full effect.";
                 }
             }
+        }
+
+        /// <summary>
+        /// Applies a scanned registry item or an explicit RAM tier/KB override (used by the RAM Registry selector).
+        /// </summary>
+        public bool ApplyRegistryValueWithSelection(
+            string id,
+            long? kbOverride,
+            double? ramGbOverride,
+            out MachineRegistryValueItem? appliedItem,
+            out string message)
+        {
+            appliedItem = ScanAllValues().FirstOrDefault(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+            if (appliedItem == null)
+            {
+                message = $"RAM registry entry '{id}' not found.";
+                return false;
+            }
+
+            if (appliedItem.Id.Equals("val.svchost.split_threshold", StringComparison.OrdinalIgnoreCase))
+            {
+                long targetKb = 0;
+                long tierGb = 0;
+
+                if (kbOverride.HasValue && kbOverride.Value >= 1048576L && kbOverride.Value <= 536870912L)
+                {
+                    targetKb = kbOverride.Value;
+                    tierGb = ramGbOverride.HasValue && ramGbOverride.Value > 0
+                        ? (long)Math.Round(ramGbOverride.Value)
+                        : Math.Max(4L, targetKb / (1024L * 1024L));
+                }
+                else if (ramGbOverride.HasValue && ramGbOverride.Value >= 4 && ramGbOverride.Value <= 512)
+                {
+                    tierGb = (long)Math.Round(ramGbOverride.Value);
+                    targetKb = _ramToCandidateMapping.TryGetValue(tierGb, out uint mapped)
+                        ? mapped
+                        : tierGb * 1024L * 1024L;
+                }
+
+                if (targetKb > 0)
+                {
+                    uint targetDword = (uint)targetKb;
+                    appliedItem.CandidateValueRaw = targetDword;
+                    appliedItem.CandidateValueDisplay = $"0x{targetDword:X8} ({targetKb:N0} KB)";
+                    appliedItem.CandidateExplanation = $"User-selected target for {tierGb} GB RAM ({targetKb:N0} KB). Actual impact requires Windows restart.";
+                    appliedItem.RecommendedSplitThresholdKb = targetKb;
+                }
+            }
+
+            bool ok = ApplyRegistryValue(appliedItem, out message);
+            if (ok && appliedItem.CurrentValueRaw != null)
+            {
+                try { appliedItem.CurrentSplitThresholdKb = Convert.ToInt64(appliedItem.CurrentValueRaw); } catch { }
+            }
+            return ok;
         }
 
         // ── Apply Value with Real Registry Write & Backup ───────────────────
@@ -671,7 +744,7 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
         // ── RAM Nearest Supported Tier Calculator ───────────────────────────
         public static long CalculateNearestRamTier(double detectedRamGb, out string reason)
         {
-            long[] supportedTiers = { 4, 8, 12, 16, 24, 32, 64, 96, 128 };
+            long[] supportedTiers = { 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
 
             // Exact or within 0.5 GB match
             foreach (var tier in supportedTiers)
@@ -699,11 +772,14 @@ namespace BiosOptimizer.Core.Implementations.RegistryValues
                 long totalBytes = 0;
                 foreach (var p in processes)
                 {
-                    try
+                    using (p)
                     {
-                        totalBytes += p.WorkingSet64;
+                        try
+                        {
+                            totalBytes += p.WorkingSet64;
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
 
                 double memoryMb = totalBytes / (1024.0 * 1024.0);

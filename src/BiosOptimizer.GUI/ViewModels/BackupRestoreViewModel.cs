@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -389,16 +389,17 @@ namespace BiosOptimizer.GUI.ViewModels
 
         private async Task CreateFullSnapshotAsync()
         {
-            var result = await OptimizationProgressService.Instance.ExecuteProtectionAwareRestorePointFlowAsync(
-                defaultName: "Error Optimizer V3 - Before Optimization",
-                onStatusUpdate: s => Status = s
-            );
-
-            if (result != null)
+            try
             {
-                Status = result.Success
-                    ? $"✓ Windows System Restore Point verified (Sequence #{result.SequenceNumber})."
-                    : $"⚠️ {result.ErrorMessage ?? result.StatusMessage}";
+                var tx = await Task.Run(() => _backupManager.CreateApplicationSnapshot(
+                    "Error Optimizer V3 - Application Vault Snapshot",
+                    "User-initiated application snapshot from Backup & Restore"
+                ));
+                Status = $"✓ Application Backup Vault snapshot verified ({tx.TransactionId.Substring(0, Math.Min(8, tx.TransactionId.Length))}...).";
+            }
+            catch (Exception ex)
+            {
+                Status = $"⚠️ Application snapshot failed: {ex.Message}";
             }
 
             await LoadBackupsAsync();

@@ -77,19 +77,21 @@ public class SetServiceStartupHandler : IActionHandler
         var originalStartupType = currentStartup;
         var serviceRunningState = _serviceManager.GetRunningState(entry.Target);
 
-        // Capture before state into Universal Backup Manager
-        try
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureServiceTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            entry.Target,
+            currentStartup.ToString(),
+            targetVal,
+            serviceRunningState.ToString(),
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureServiceTweak(
-                "Manual",
-                entry.Target,
-                currentStartup.ToString(),
-                targetVal,
-                serviceRunningState.ToString(),
-                "SAFE"
-            );
+            result.Status = ResultStatus.Failed;
+            result.Message = bkErr;
+            return result;
         }
-        catch { }
 
         // Apply
         try

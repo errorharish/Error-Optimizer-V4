@@ -32,36 +32,46 @@ public class DisableScheduledTaskHandler : IActionHandler
             return result;
         }
 
-        // Capture before state into Universal Backup Manager
-        try
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureTargetedGenericTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            $"task.{entry.Target}".ToLowerInvariant().Replace('\\', '.'),
+            $"Scheduled Task: {entry.Target}",
+            "Services",
+            "ScheduledTask",
+            state.ToString(),
+            "Disabled",
+            "ScheduledTaskRestore",
+            true,
+            "SAFE",
+            targetKey: entry.Target
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureGenericTweak(
-                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
-                $"task.{entry.Target}".ToLowerInvariant().Replace('\\', '.'),
-                $"Scheduled Task: {entry.Target}",
-                "Services",
-                "ScheduledTask",
-                state.ToString(),
-                "Disabled",
-                "TaskStateRestore",
-                false, // Task re-enabling not automated via BackupManager
-                "SAFE"
-            );
+            result.Status = ResultStatus.Failed;
+            result.Message = bkErr;
+            return result;
         }
-        catch { }
 
         bool success = _taskManager.Disable(entry.Target);
         if (!success)
         {
-            result.Status = ResultStatus.Failed;
-            result.Message = "Failed to disable task.";
+            string err = !string.IsNullOrWhiteSpace(_taskManager.LastError)
+                ? _taskManager.LastError
+                : "Failed to disable task.";
+            result.Status = (err.Contains("Administrator", StringComparison.OrdinalIgnoreCase) ||
+                             err.Contains("Access Denied", StringComparison.OrdinalIgnoreCase) ||
+                             err.Contains("privilege", StringComparison.OrdinalIgnoreCase))
+                ? ResultStatus.Blocked
+                : ResultStatus.Failed;
+            result.Message = err;
             return result;
         }
 
         if (_taskManager.GetState(entry.Target) != TaskState.Disabled)
         {
             result.Status = ResultStatus.Failed;
-            result.Message = "Verification failed. Task state is not disabled.";
+            result.Message = "Verification failed: Task state did not transition to Disabled after execution.";
             return result;
         }
 

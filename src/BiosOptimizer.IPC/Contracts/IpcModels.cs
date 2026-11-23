@@ -76,7 +76,72 @@ namespace BiosOptimizer.IPC.Contracts
         V4ExecuteFullOptimization,
         V4RollbackMaximumPerformance,
         V4GetLiveMetrics,
-        V4GetOptimizationHistory
+        V4GetOptimizationHistory,
+        V4GetProcessTargetBand,
+        V4GetWorkloadGuardTelemetry,
+        V4SuppressWorkloadDrift,
+
+        // Phase 1 (NEW-BE-006): Service IPC parity, blocklist & missing OS actions
+        GetDebloatBlocklist,
+        SaveDebloatBlocklist,
+        RequestUefiReboot,
+        ScheduleSystemRestart,
+        CancelScheduledRestart,
+        EvaluateAboutCatalog,
+        DiscoverOneClick,
+        ExecuteOneClick,
+        EvaluateSystemHealth,
+        GetRamRegistryValues,
+        ApplyRamRegistryValue,
+        RollbackRamRegistryValue,
+        GetGpuRegistryValues,
+        ApplyGpuRegistryValue,
+        RollbackGpuRegistryValue,
+        WorkloadDiscover,
+        WorkloadApply,
+        WorkloadRevert,
+
+        // Phase 2 (NEW-BE-007): Unified settings, startup registration & audit logs
+        GetUnifiedSettings,
+        SaveUnifiedSettings,
+        ResetUnifiedSettings,
+        GetStartupRegistrationStatus,
+        SetStartupRegistration,
+        ExportAuditLogs,
+        PurgeExpiredLogs,
+
+        // Phase 3 (NEW-BE-002): Persistent Headless Auto-Optimize Scheduler
+        GetAutoOptimizeState,
+        SaveAutoOptimizeConfig,
+        TriggerAutoOptimizeNow,
+        CancelAutoOptimizeRun,
+        SetAutoOptimizePaused,
+        ClearAutoOptimizeHistory,
+        ScanAutoOptimizeTasks,
+
+        // Phase 4 (NEW-BE-003): Unified System Tools Orchestrator
+        GetSystemToolsCatalog,
+        ExecuteSystemTool,
+        GetSystemToolJobStatus,
+        CancelSystemToolJob,
+        GetSystemToolReport,
+
+        // Phase 5 (NEW-BE-001): Hardware-Safe CPU/GPU Performance Tuning
+        ProbePerformanceTuning,
+        ExecutePerformanceTuning,
+        RollbackPerformanceTuning,
+
+        // Phase 7 (NEW-BE-005): Kernel DPC & Storage/Vendor Thermal Telemetry
+        GetKernelTelemetry,
+        SetTelemetrySubscriptionActive,
+
+        // Application Backup Snapshot Lifecycle (Separated from Windows System Restore)
+        CreateApplicationBackup,
+        ValidateBackupIntegrity,
+        DeleteBackup,
+
+        // Interactive User Session Agent Bridge (Decouples Session 0 from Desktop Window Monitoring)
+        ReportInteractiveSessionState
     }
 
     public class IpcMessage

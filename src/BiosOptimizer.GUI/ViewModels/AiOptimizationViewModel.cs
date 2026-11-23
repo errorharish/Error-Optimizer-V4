@@ -15,15 +15,13 @@ namespace BiosOptimizer.GUI.ViewModels
 {
     public enum AiOptimizationActiveTab
     {
-        RamLimiter = 0,
-        WorkloadOptimization = 1,
-        PowerPlan = 2
+        WorkloadOptimization = 0,
+        PowerPlan = 1
     }
 
     public class AiOptimizationViewModel : ViewModelBase
     {
         private readonly IIpcClient _ipc;
-        private readonly RamLimiterEngine _ramEngine;
         private readonly WorkloadOptimizationEngine _workloadEngine;
         private readonly PowerPlanEngine _powerEngine;
         private readonly System.Windows.Threading.DispatcherTimer _refreshTimer;
@@ -31,12 +29,11 @@ namespace BiosOptimizer.GUI.ViewModels
         public AiOptimizationViewModel(IIpcClient ipc)
         {
             _ipc = ipc;
-            _ramEngine = RamLimiterEngine.Instance;
             _workloadEngine = WorkloadOptimizationEngine.Instance;
             _powerEngine = PowerPlanEngine.Instance;
 
             // Module Tab Switching
-            SelectRamLimiterTabCommand = new RelayCommand(_ => SelectTab(AiOptimizationActiveTab.RamLimiter));
+            SelectRamLimiterTabCommand = new RelayCommand(_ => SelectTab(AiOptimizationActiveTab.WorkloadOptimization));
             SelectWorkloadTabCommand = new RelayCommand(_ => SelectTab(AiOptimizationActiveTab.WorkloadOptimization));
             SelectPowerPlanTabCommand = new RelayCommand(_ => SelectTab(AiOptimizationActiveTab.PowerPlan));
 
@@ -64,20 +61,6 @@ namespace BiosOptimizer.GUI.ViewModels
             ToggleActiveModuleModeCommand = new RelayCommand(_ => ToggleActiveModuleMode());
             SetActiveModuleNormalCommand = new RelayCommand(_ => SetActiveModuleNormal());
             SetActiveModuleCustomCommand = new RelayCommand(_ => SetActiveModuleCustom());
-
-            // RAM Limiter Commands
-            ToggleMasterSwitchCommand = new RelayCommand(_ => ToggleMasterSwitch());
-            SetViewModeNormalCommand = new RelayCommand(_ => SetViewMode(RamLimiterViewMode.Normal));
-            SetViewModeCustomCommand = new RelayCommand(_ => SetViewMode(RamLimiterViewMode.Custom));
-            SetAutoModeCommand = new RelayCommand(_ => SetNormalMode(RamLimiterMode.Auto));
-            SetLightModeCommand = new RelayCommand(_ => SetNormalMode(RamLimiterMode.Light));
-            SetAggressiveModeCommand = new RelayCommand(_ => SetNormalMode(RamLimiterMode.Aggressive));
-            SelectSearchAppCommand = new RelayCommand(p => SelectSearchApp(p as SearchableAppItem));
-            EnableCustomTargetCommand = new RelayCommand(_ => EnableCustomTarget());
-            ToggleCustomTargetCommand = new RelayCommand(p => ToggleCustomTarget(p as CustomTargetItem));
-            RemoveCustomTargetCommand = new RelayCommand(p => RemoveCustomTarget(p as CustomTargetItem));
-            ToggleForegroundProtectionCommand = new RelayCommand(_ => ToggleForegroundProtection());
-            BrowseCustomRamAppCommand = new RelayCommand(_ => BrowseCustomRamApp());
 
             // Workload Optimization Commands
             ToggleWorkloadMasterSwitchCommand = new RelayCommand(_ => ToggleWorkloadMasterSwitch());
@@ -111,15 +94,13 @@ namespace BiosOptimizer.GUI.ViewModels
                 Interval = TimeSpan.FromSeconds(2.0)
             };
             _refreshTimer.Tick += (s, e) => RefreshUiState();
-
-            _ramEngine.TelemetryUpdated += () => UiDispatcher.Run(RefreshUiState);
             _workloadEngine.StateUpdated += () => UiDispatcher.Run(RefreshUiState);
 
             RefreshUiState();
         }
 
         #region Module Tab Navigation
-        private AiOptimizationActiveTab _activeTab = AiOptimizationActiveTab.RamLimiter;
+        private AiOptimizationActiveTab _activeTab = AiOptimizationActiveTab.WorkloadOptimization;
         public AiOptimizationActiveTab ActiveTab
         {
             get => _activeTab;
@@ -143,7 +124,7 @@ namespace BiosOptimizer.GUI.ViewModels
             }
         }
 
-        public bool IsRamLimiterTab => ActiveTab == AiOptimizationActiveTab.RamLimiter;
+        public bool IsRamLimiterTab => false;
         public bool IsWorkloadTab => ActiveTab == AiOptimizationActiveTab.WorkloadOptimization;
         public bool IsPowerPlanTab => ActiveTab == AiOptimizationActiveTab.PowerPlan;
 
@@ -178,47 +159,30 @@ namespace BiosOptimizer.GUI.ViewModels
         public Color RiskGlowColor => Color.FromRgb(0x10, 0xB9, 0x81);
         public string RiskIcon => "";
         public string RiskDescription => "Non-destructive adaptive memory tuning & dynamic thread priority.";
-        public int SafeActionCount => _ramEngine.AutoActionCount > 0 ? _ramEngine.AutoActionCount : 18;
+        public int SafeActionCount => 18;
         public int MediumRiskActionCount => 0;
         public int HighRiskActionCount => 0;
         #endregion
 
         #region Top Mode Switcher Properties (Consistent with 6 Profiles)
-        public string CurrentActiveModuleModeText => IsPowerPlanTab
-            ? "WINDOWS POWER SCHEME"
-            : (IsRamLimiterTab 
-                ? (IsNormalView ? "CURRENT MODE: NORMAL" : "CURRENT MODE: CUSTOM")
-                : (IsWorkloadNormalView ? "CURRENT MODE: NORMAL" : "CURRENT MODE: CUSTOM"));
+        public string CurrentActiveModuleModeText => IsPowerPlanTab ? "WINDOWS POWER SCHEME" : (IsWorkloadNormalView ? "CURRENT MODE: NORMAL" : "CURRENT MODE: CUSTOM");
 
-        public string CurrentActiveModuleModeToggleText => IsPowerPlanTab
-            ? "REFRESH POWER PLANS"
-            : (IsRamLimiterTab
-                ? (IsNormalView ? "SWITCH TO CUSTOM" : "SWITCH TO NORMAL")
-                : (IsWorkloadNormalView ? "SWITCH TO CUSTOM" : "SWITCH TO NORMAL"));
+        public string CurrentActiveModuleModeToggleText => IsPowerPlanTab ? "REFRESH POWER PLANS" : (IsWorkloadNormalView ? "SWITCH TO CUSTOM" : "SWITCH TO NORMAL");
 
-        public string CurrentActiveModuleDescription => IsPowerPlanTab
-            ? "Real hardware-configured Windows power schemes. Select any verified applicable scheme or create Ultimate Performance on supported machines."
-            : (IsRamLimiterTab
-                ? (IsNormalView ? "Automatically manages background process memory and enforces dynamic working-set bounds." : "Manually control specific application targets, memory limits, and foreground protection.")
-                : (IsWorkloadNormalView ? "Automatically detects active games, creative tools, and emulators to apply hardware-aware performance profiles." : "Manually configure per-application optimizations, saved profiles, and custom auto-apply rules."));
+        public string CurrentActiveModuleDescription => IsPowerPlanTab ? "Real hardware-configured Windows power schemes. Select any verified applicable scheme or create Ultimate Performance on supported machines." : (IsWorkloadNormalView ? "Automatically detects active games, creative tools, and emulators to apply hardware-aware performance profiles." : "Manually configure per-application optimizations, saved profiles, and custom auto-apply rules.");
 
-        public bool CurrentActiveModuleIsNormal => IsPowerPlanTab ? true : (IsRamLimiterTab ? IsNormalView : IsWorkloadNormalView);
-        public bool CurrentActiveModuleIsCustom => IsPowerPlanTab ? false : (IsRamLimiterTab ? IsCustomView : IsWorkloadCustomView);
+        public bool CurrentActiveModuleIsNormal => IsPowerPlanTab ? true : IsWorkloadNormalView;
+        public bool CurrentActiveModuleIsCustom => IsPowerPlanTab ? false : IsWorkloadCustomView;
 
         public ICommand ToggleActiveModuleModeCommand { get; }
         public ICommand SetActiveModuleNormalCommand { get; }
         public ICommand SetActiveModuleCustomCommand { get; }
 
-        private void ToggleActiveModuleMode()
+                private void ToggleActiveModuleMode()
         {
             if (IsPowerPlanTab)
             {
                 _ = RefreshPowerPlansAsync();
-            }
-            else if (IsRamLimiterTab)
-            {
-                if (IsNormalView) SetViewMode(RamLimiterViewMode.Custom);
-                else SetViewMode(RamLimiterViewMode.Normal);
             }
             else
             {
@@ -229,239 +193,12 @@ namespace BiosOptimizer.GUI.ViewModels
 
         private void SetActiveModuleNormal()
         {
-            if (IsRamLimiterTab) SetViewMode(RamLimiterViewMode.Normal);
-            else SetWorkloadViewMode(WorkloadViewMode.Normal);
+            SetWorkloadViewMode(WorkloadViewMode.Normal);
         }
 
         private void SetActiveModuleCustom()
         {
-            if (IsRamLimiterTab) SetViewMode(RamLimiterViewMode.Custom);
-            else SetWorkloadViewMode(WorkloadViewMode.Custom);
-        }
-        #endregion
-
-        #region 1. RAM LIMITER
-        public bool IsNormalView => _ramEngine.Config.ViewMode == RamLimiterViewMode.Normal;
-        public bool IsCustomView => _ramEngine.Config.ViewMode == RamLimiterViewMode.Custom;
-        public string ActiveViewModeName => IsNormalView ? "NORMAL (AUTOMATIC)" : "CUSTOM (TARGETED)";
-
-        public bool IsMasterEnabled => _ramEngine.Config.IsEnabled;
-        public string MasterSwitchText => IsMasterEnabled ? "ON" : "OFF";
-        public string MasterSwitchBrush => IsMasterEnabled ? "#10B981" : "#6B7280";
-
-        public RamLimiterMode NormalMode => _ramEngine.Config.NormalMode;
-        public bool IsAutoMode => NormalMode == RamLimiterMode.Auto;
-        public bool IsLightMode => NormalMode == RamLimiterMode.Light;
-        public bool IsAggressiveMode => NormalMode == RamLimiterMode.Aggressive;
-
-        public string ActiveModeDisplay => NormalMode switch
-        {
-            RamLimiterMode.Light => "LIGHT ACTIVE",
-            RamLimiterMode.Aggressive => "AGGRESSIVE ACTIVE",
-            _ => "AUTO ACTIVE"
-        };
-
-        public string ActiveModeHeader => NormalMode switch
-        {
-            RamLimiterMode.Light => "LIGHT",
-            RamLimiterMode.Aggressive => "AGGRESSIVE",
-            _ => "AUTO"
-        };
-
-        public bool ForegroundProtection => _ramEngine.Config.ForegroundProtection;
-        public string ForegroundProtectionText => ForegroundProtection ? "PROTECTED (ON)" : "DISABLED (OFF)";
-
-        public string SystemRamStatus => $"{_ramEngine.SystemUsedRamMb / 1024.0:F1} / {_ramEngine.SystemTotalRamMb / 1024.0:F1} GB";
-        public string TotalSystemRamDisplay => $"{_ramEngine.SystemTotalRamMb / 1024.0:F1} GB";
-        public string UsedSystemRamDisplay => $"{_ramEngine.SystemUsedRamMb / 1024.0:F1} GB";
-        public double SystemRamPercent => _ramEngine.SystemRamUsagePercent;
-        public string SystemRamPercentDisplay => $"{_ramEngine.SystemRamUsagePercent:F0}%";
-
-        public string MemoryPressureText => _ramEngine.PressureLevelText;
-        public string MemoryPressureBrush => _ramEngine.PressureLevelBrush;
-
-        public int HighRamAppsCount => _ramEngine.AutoDetectedGroups.Count(g => g.Status == RamAppStatus.HighRam || g.Status == RamAppStatus.NearLimit);
-        public int ActiveCustomTargetsCount => _ramEngine.ActiveCustomTargets.Count(t => t.IsEnabled);
-        public string CustomTargetsStatusText => $"{ActiveCustomTargetsCount} ACTIVE";
-        public int AutoActionCount => _ramEngine.AutoActionCount;
-
-        public ObservableCollection<TargetProcessGroup> AutoDetectedGroups { get; } = new();
-        public ObservableCollection<CustomTargetItem> CustomTargets { get; } = new();
-        public ObservableCollection<SearchableAppItem> SearchResults { get; } = new();
-        public ObservableCollection<RamLimiterLogEntry> ActionLogs { get; } = new();
-
-        private string _searchQuery = string.Empty;
-        public string SearchQuery
-        {
-            get => _searchQuery;
-            set { if (_searchQuery != value) { _searchQuery = value; OnPropertyChanged(); PerformSearch(); } }
-        }
-
-        private SearchableAppItem? _selectedSearchApp;
-        public SearchableAppItem? SelectedSearchApp
-        {
-            get => _selectedSearchApp;
-            set
-            {
-                _selectedSearchApp = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(HasSelectedApp));
-                OnPropertyChanged(nameof(SelectedAppName));
-                OnPropertyChanged(nameof(SelectedAppExe));
-                OnPropertyChanged(nameof(SelectedAppPath));
-            }
-        }
-
-        public bool HasSelectedApp => SelectedSearchApp != null;
-        public string SelectedAppName => SelectedSearchApp?.DisplayName ?? "No application selected";
-        public string SelectedAppExe => SelectedSearchApp?.ExecutableName ?? "";
-        public string SelectedAppPath => SelectedSearchApp?.ExecutablePath ?? "";
-
-        private double _customRamLimitMb = 1500;
-        public double CustomRamLimitMb { get => _customRamLimitMb; set { _customRamLimitMb = value; OnPropertyChanged(); } }
-
-        public ICommand ToggleMasterSwitchCommand { get; }
-        public ICommand SetViewModeNormalCommand { get; }
-        public ICommand SetViewModeCustomCommand { get; }
-        public ICommand SetAutoModeCommand { get; }
-        public ICommand SetLightModeCommand { get; }
-        public ICommand SetAggressiveModeCommand { get; }
-        public ICommand SelectSearchAppCommand { get; }
-        public ICommand EnableCustomTargetCommand { get; }
-        public ICommand ToggleCustomTargetCommand { get; }
-        public ICommand RemoveCustomTargetCommand { get; }
-        public ICommand ToggleForegroundProtectionCommand { get; }
-
-        private void ToggleMasterSwitch()
-        {
-            if (IsMasterEnabled) _ramEngine.Stop();
-            else _ramEngine.Start();
-            RefreshUiState();
-        }
-
-        private void SetViewMode(RamLimiterViewMode mode)
-        {
-            _ramEngine.SetViewMode(mode);
-            RefreshUiState();
-        }
-
-        private void SetNormalMode(RamLimiterMode mode)
-        {
-            _ramEngine.SetNormalMode(mode);
-            RefreshUiState();
-        }
-
-        private void ToggleForegroundProtection()
-        {
-            _ramEngine.SetForegroundProtection(!ForegroundProtection);
-            RefreshUiState();
-        }
-
-        private void SelectSearchApp(SearchableAppItem? app)
-        {
-            if (app == null) return;
-            if (SelectedSearchApp == app)
-            {
-                SelectedSearchApp = null;
-            }
-            else
-            {
-                SelectedSearchApp = app;
-                CustomRamLimitMb = app.CurrentRamMb > 500 ? Math.Round(app.CurrentRamMb * 0.75) : 1500;
-            }
-            
-            // Trigger UI update for search results
-            foreach (var item in SearchResults)
-            {
-                item.IsSelected = (item == SelectedSearchApp);
-            }
-        }
-
-        private void EnableCustomTarget()
-        {
-            if (SelectedSearchApp == null) return;
-            _ramEngine.AddOrUpdateCustomTarget(new CustomTargetItem
-            {
-                DisplayName = SelectedSearchApp.DisplayName,
-                ExecutableName = SelectedSearchApp.ExecutableName,
-                ExecutablePath = SelectedSearchApp.ExecutablePath,
-                RamLimitMb = CustomRamLimitMb > 50 ? CustomRamLimitMb : 1500,
-                IsEnabled = true,
-                ForegroundProtection = ForegroundProtection
-            });
-            RefreshUiState();
-        }
-
-        private void ToggleCustomTarget(CustomTargetItem? item)
-        {
-            if (item == null) return;
-            _ramEngine.ToggleCustomTarget(item.Id);
-            RefreshUiState();
-        }
-
-        private void RemoveCustomTarget(CustomTargetItem? item)
-        {
-            if (item == null) return;
-            _ramEngine.RemoveCustomTarget(item.Id);
-            RefreshUiState();
-        }
-
-        public ICommand BrowseCustomRamAppCommand { get; }
-
-        private void BrowseCustomRamApp()
-        {
-            try
-            {
-                var dialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Select Application Executable for RAM Limiter",
-                    Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*",
-                    CheckFileExists = true,
-                    Multiselect = false
-                };
-
-                if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.FileName))
-                {
-                    string path = dialog.FileName;
-                    string exeName = System.IO.Path.GetFileNameWithoutExtension(path);
-                    string displayName = exeName;
-                    try
-                    {
-                        var vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
-                        if (!string.IsNullOrWhiteSpace(vi.ProductName) && !vi.ProductName.Contains("Setup", StringComparison.OrdinalIgnoreCase))
-                        {
-                            displayName = vi.ProductName;
-                        }
-                    }
-                    catch { }
-
-                    _ramEngine.AddOrUpdateCustomTarget(new CustomTargetItem
-                    {
-                        DisplayName = displayName,
-                        ExecutableName = exeName,
-                        ExecutablePath = path,
-                        RamLimitMb = CustomRamLimitMb > 50 ? CustomRamLimitMb : 1500,
-                        IsEnabled = true,
-                        ForegroundProtection = ForegroundProtection
-                    });
-
-                    // Unified application identity across Workload and RAM limiter
-                    _workloadEngine.AddCustomWorkloadApp(path, displayName, WorkloadType.Gaming);
-
-                    RefreshUiState();
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AiOptimizationViewModel] Error browsing RAM app: {ex.Message}");
-            }
-        }
-
-        private void PerformSearch()
-        {
-            var results = _ramEngine.SearchApplications(SearchQuery);
-            SearchResults.Clear();
-            foreach (var r in results) SearchResults.Add(r);
+            SetWorkloadViewMode(WorkloadViewMode.Custom);
         }
         #endregion
 
@@ -528,8 +265,8 @@ namespace BiosOptimizer.GUI.ViewModels
         public string AutoOptimizationToggleBrush => IsWorkloadEnabled ? "#10B981" : "#6B7280";
         public string WorkloadEngineRunningText => IsWorkloadEnabled ? "● ENGINE RUNNING" : "○ ENGINE STOPPED";
         public string WorkloadStartupText => IsWorkloadEnabled ? "● ENABLED — STARTS AUTOMATICALLY" : "○ DISABLED — WILL NOT START";
-        public string RamEngineRunningText => IsMasterEnabled ? "● ENGINE RUNNING" : "○ ENGINE STOPPED";
-        public string RamStartupText => IsMasterEnabled ? "● ENABLED — STARTS AUTOMATICALLY" : "○ DISABLED — WILL NOT START";
+        public string RamEngineRunningText => "○ ENGINE DECOMMISSIONED";
+        public string RamStartupText => "○ DISABLED — DECOMMISSIONED";
 
         public int VerifiedActionsCount => WorkloadPlan.Count(p => p.Verified);
         public int TotalPlanActionsCount => WorkloadPlan.Count;
@@ -893,18 +630,12 @@ namespace BiosOptimizer.GUI.ViewModels
                     };
                 }
 
-                return IsNormalView ? (NormalMode switch
-                {
-                    RamLimiterMode.Light => "Pro Tip: LIGHT mode provides conservative RAM control with application stability prioritized.",
-                    RamLimiterMode.Aggressive => "Pro Tip: AGGRESSIVE mode enforces stronger RAM control. Note: More aggressive RAM control may affect application stability.",
-                    _ => "Pro Tip: AUTO mode is recommended. It adapts memory control to current system pressure instead of forcing the same RAM limit on every application."
-                }) : "Pro Tip: Custom mode only controls the specific applications you enable above. All other processes remain untouched.";
+                return "Pro Tip: Auto mode detects the active workload and applies a hardware-aware performance profile automatically.";
             }
         }
 
         public void RefreshUiState()
         {
-            _ramEngine.ScanAndEnforce();
             _workloadEngine.DetectAndProcessWorkload();
 
             // Top Mode Switcher Properties
@@ -913,33 +644,6 @@ namespace BiosOptimizer.GUI.ViewModels
             OnPropertyChanged(nameof(CurrentActiveModuleDescription));
             OnPropertyChanged(nameof(CurrentActiveModuleIsNormal));
             OnPropertyChanged(nameof(CurrentActiveModuleIsCustom));
-
-            // RAM Limiter Properties
-            OnPropertyChanged(nameof(IsMasterEnabled));
-            OnPropertyChanged(nameof(MasterSwitchText));
-            OnPropertyChanged(nameof(MasterSwitchBrush));
-            OnPropertyChanged(nameof(IsNormalView));
-            OnPropertyChanged(nameof(IsCustomView));
-            OnPropertyChanged(nameof(ActiveViewModeName));
-            OnPropertyChanged(nameof(NormalMode));
-            OnPropertyChanged(nameof(IsAutoMode));
-            OnPropertyChanged(nameof(IsLightMode));
-            OnPropertyChanged(nameof(IsAggressiveMode));
-            OnPropertyChanged(nameof(ActiveModeDisplay));
-            OnPropertyChanged(nameof(ActiveModeHeader));
-            OnPropertyChanged(nameof(ForegroundProtection));
-            OnPropertyChanged(nameof(ForegroundProtectionText));
-            OnPropertyChanged(nameof(SystemRamStatus));
-            OnPropertyChanged(nameof(TotalSystemRamDisplay));
-            OnPropertyChanged(nameof(UsedSystemRamDisplay));
-            OnPropertyChanged(nameof(SystemRamPercent));
-            OnPropertyChanged(nameof(SystemRamPercentDisplay));
-            OnPropertyChanged(nameof(MemoryPressureText));
-            OnPropertyChanged(nameof(MemoryPressureBrush));
-            OnPropertyChanged(nameof(HighRamAppsCount));
-            OnPropertyChanged(nameof(ActiveCustomTargetsCount));
-            OnPropertyChanged(nameof(CustomTargetsStatusText));
-            OnPropertyChanged(nameof(AutoActionCount));
 
             // Workload Properties
             OnPropertyChanged(nameof(IsWorkloadEnabled));
@@ -982,18 +686,6 @@ namespace BiosOptimizer.GUI.ViewModels
             OnPropertyChanged(nameof(TotalPlanActionsCount));
             OnPropertyChanged(nameof(PerformanceBoostSummaryText));
             OnPropertyChanged(nameof(ProTipText));
-
-            // Sync RAM Limiter Collections
-            AutoDetectedGroups.Clear();
-            foreach (var g in _ramEngine.AutoDetectedGroups) AutoDetectedGroups.Add(g);
-
-            CustomTargets.Clear();
-            foreach (var t in _ramEngine.ActiveCustomTargets) CustomTargets.Add(t);
-
-            if (SearchResults.Count == 0 && string.IsNullOrEmpty(SearchQuery)) PerformSearch();
-
-            ActionLogs.Clear();
-            foreach (var log in _ramEngine.ActionLogs.Take(20)) ActionLogs.Add(log);
 
             // Sync Multi-Workload Live Sessions
             var currentSessions = _workloadEngine.ActiveSessions;

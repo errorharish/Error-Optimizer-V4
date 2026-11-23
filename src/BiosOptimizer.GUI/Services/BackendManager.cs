@@ -7,14 +7,15 @@ using System.Windows;
 namespace BiosOptimizer.GUI.Services
 {
     /// <summary>
-    /// Manages the lifecycle of the hidden backend process (BiosOptimizer.Service.exe).
-    /// Started on GUI launch, terminated when GUI closes. Auto-restarts on crash.
+    /// Manages the lifecycle of the backend service (BiosOptimizer.Service.exe).
+    /// Supports both Windows Service (SCM) mode and direct child-process mode.
+    /// Logs all lifecycle transitions to %LOCALAPPDATA%\ErrorOptimizer\ui.log.
     /// </summary>
     public sealed class BackendManager : IDisposable
     {
         // Location is determined at RUNTIME based on where ErrorOptimizer.exe lives.
         // Production layout:
-        //   dist\win-x64\ErrorOptimizer.exe
+        //   dist\win-x64\ERROR OPTIMIZER.exe
         //   dist\win-x64\core\BiosOptimizer.Service.exe
         private readonly string _backendExePath;
         private readonly string _backendWorkDir;
@@ -29,6 +30,7 @@ namespace BiosOptimizer.GUI.Services
         public BackendManager()
         {
             _backendExePath = ResolveBackendServicePath(out _backendWorkDir);
+            UiLogger.Log($"BackendManager initialized. Backend binary path: '{_backendExePath}' (WorkDir: '{_backendWorkDir}')");
         }
 
         private static string ResolveBackendServicePath(out string workDir)
@@ -111,16 +113,20 @@ namespace BiosOptimizer.GUI.Services
         }
 
         /// <summary>
-        /// Kill any stale backend instances, then launch a fresh hidden backend process.
+        /// Attempts SCM service start or launches a fresh hidden backend child process.
         /// </summary>
         public void StartBackend()
         {
             if (_disposed) return;
 
+            UiLogger.Log("StartBackend() invoked.");
+
             if (!File.Exists(_backendExePath))
             {
+                var errorMsg = $"Backend service binary not found at '{_backendExePath}'";
+                UiLogger.Log($"[FATAL] {errorMsg}");
                 BiosOptimizer.Core.Implementations.Diagnostics.ApplicationCrashLogger.Instance.LogCrash(
-                    new FileNotFoundException($"Backend service binary not found at '{_backendExePath}'"), 
+                    new FileNotFoundException(errorMsg), 
                     "BackendManager.StartBackend", 
                     false);
 
@@ -139,14 +145,18 @@ namespace BiosOptimizer.GUI.Services
                 return;
             }
 
-            // Only kill stale instances from other paths or old instances
+            // Clean up stale instances
             KillStaleInstances();
 
             SessionId = Guid.NewGuid().ToString("N");
             BackendPid = 0;
 
+            // Attempt to ensure Windows Service registration/startup in SCM if applicable
+            TryStartScmService();
+
             try
             {
+                UiLogger.Log($"Launching backend child process: '{_backendExePath}' --session {SessionId}");
                 _process = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -154,29 +164,41 @@ namespace BiosOptimizer.GUI.Services
                         FileName         = _backendExePath,
                         Arguments        = $"--session {SessionId}",
                         WorkingDirectory = _backendWorkDir,
-                        // Hide everything — no console window, no taskbar entry
                         CreateNoWindow   = true,
                         UseShellExecute  = false,
                         WindowStyle      = ProcessWindowStyle.Hidden,
-                        // Redirect output so it doesn't attach to GUI console (if any)
                         RedirectStandardOutput = true,
                         RedirectStandardError  = true,
                     },
                     EnableRaisingEvents = true
                 };
 
-                _process.OutputDataReceived += (_, _) => { };
-                _process.ErrorDataReceived  += (_, _) => { };
+                _process.OutputDataReceived += (_, args) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(args.Data))
+                    {
+                        UiLogger.Log($"[BACKEND_STDOUT] {args.Data}");
+                    }
+                };
+                _process.ErrorDataReceived += (_, args) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(args.Data))
+                    {
+                        UiLogger.Log($"[BACKEND_STDERR] {args.Data}");
+                    }
+                };
                 _process.Exited += OnProcessExited;
 
                 _process.Start();
                 BackendPid = _process.Id;
+                UiLogger.Log($"Backend child process started successfully (PID: {BackendPid}).");
                 
                 _process.BeginOutputReadLine();
                 _process.BeginErrorReadLine();
             }
             catch (Exception ex)
             {
+                UiLogger.LogError("Failed to launch backend child process", ex);
                 BiosOptimizer.Core.Implementations.Diagnostics.ApplicationCrashLogger.Instance.LogCrash(ex, "BackendManager.StartBackend", false);
                 if (!App.IsStartupBackground)
                 {
@@ -191,31 +213,74 @@ namespace BiosOptimizer.GUI.Services
             }
         }
 
+        private void TryStartScmService()
+        {
+            try
+            {
+                // Check if BiosOptimizerService exists in SCM
+                using var queryProc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "sc.exe",
+                    Arguments = "query BiosOptimizerService",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true
+                });
+                queryProc?.WaitForExit(1000);
+                var output = queryProc?.StandardOutput.ReadToEnd() ?? "";
+
+                if (output.Contains("STATE"))
+                {
+                    UiLogger.Log("BiosOptimizerService found in SCM. Attempting to start if not running...");
+                    using var startProc = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "sc.exe",
+                        Arguments = "start BiosOptimizerService",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                    startProc?.WaitForExit(2000);
+                }
+                else
+                {
+                    UiLogger.Log("BiosOptimizerService not registered in SCM; child-process mode will handle execution.");
+                }
+            }
+            catch (Exception ex)
+            {
+                UiLogger.Log($"SCM query/start skipped or failed ({ex.Message}); proceeding with child process mode.");
+            }
+        }
+
         private void KillStaleInstances()
         {
-            var myProcessId = Process.GetCurrentProcess().Id;
-            foreach (var proc in Process.GetProcessesByName("BiosOptimizer.Service"))
+            try
             {
-                try
+                foreach (var proc in Process.GetProcessesByName("BiosOptimizer.Service"))
                 {
-                    // If it's a stale instance (doesn't match our exact path, or we want to clean slate anyway)
-                    // The user said: "If an existing backend belongs to an older build/path: terminate it safely."
-                    // We'll just terminate all BiosOptimizer.Service processes to ensure a clean session for this GUI.
-                    proc.Kill(entireProcessTree: true); 
-                    proc.WaitForExit(3000); 
+                    try
+                    {
+                        UiLogger.Log($"Terminating stale BiosOptimizer.Service process (PID {proc.Id})");
+                        proc.Kill(entireProcessTree: true); 
+                        proc.WaitForExit(3000); 
+                    }
+                    catch { }
+                    finally { proc.Dispose(); }
                 }
-                catch { /* process may have already exited or access denied */ }
-                finally { proc.Dispose(); }
+                System.Threading.Thread.Sleep(300);
             }
-            // Small delay so the OS can release any named-pipe handle
-            System.Threading.Thread.Sleep(300);
+            catch (Exception ex)
+            {
+                UiLogger.Log($"KillStaleInstances warning: {ex.Message}");
+            }
         }
 
         private async void OnProcessExited(object sender, EventArgs e)
         {
             if (_intentionalShutdown || _disposed) return;
 
-            // Wait briefly before auto-restart to avoid thrashing
+            UiLogger.Log($"Backend child process exited unexpectedly. Restarting in 2s...");
+
             await Task.Delay(2000);
 
             if (_intentionalShutdown || _disposed) return;
@@ -227,6 +292,7 @@ namespace BiosOptimizer.GUI.Services
         public void Shutdown()
         {
             _intentionalShutdown = true;
+            UiLogger.Log("BackendManager.Shutdown() called.");
             DisposeProcess();
         }
 

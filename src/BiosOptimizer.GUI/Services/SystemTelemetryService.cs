@@ -7,8 +7,10 @@ using System.Linq;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using BiosOptimizer.Core.Implementations;
 using BiosOptimizer.Core.Implementations.Memory;
 using BiosOptimizer.Core.Implementations.Power;
 using BiosOptimizer.Core.Implementations.RegistryValues;
@@ -31,7 +33,7 @@ namespace BiosOptimizer.GUI.Services
     public class SystemTelemetryData
     {
         // CPU
-        public double CpuUtilization { get; set; }
+        public double CpuUtilization { get; set; } = -1.0;
         public double CpuFrequencyGhz { get; set; }
         public double CpuTemperatureC { get; set; }
         public int ProcessCount { get; set; }
@@ -99,8 +101,12 @@ namespace BiosOptimizer.GUI.Services
         private DateTime _prevNetSampleTime = DateTime.MinValue;
 
         // GPU Cache
+        private List<DxgiAdapterInfo>? _cachedDxgiAdapters;
         private List<GpuTelemetryItem>? _cachedGpuInfo;
         private DateTime _lastGpuDetection = DateTime.MinValue;
+        private PerformanceCounterCategory? _gpuCategory;
+        private DateTime _lastGpuCountersUpdate = DateTime.MinValue;
+        private readonly List<(int TargetIndex, PerformanceCounter Counter)> _cachedGpuCounters = new();
 
         public event Action<SystemTelemetryData>? TelemetryUpdated;
 
@@ -333,7 +339,7 @@ namespace BiosOptimizer.GUI.Services
             try
             {
                 if (!GetSystemTimes(out long idleTime, out long kernelTime, out long userTime))
-                    return 0;
+                    return -1.0;
 
                 if (_prevCpuSampleTime == DateTime.MinValue)
                 {
@@ -341,7 +347,7 @@ namespace BiosOptimizer.GUI.Services
                     _prevKernelTime = kernelTime;
                     _prevUserTime = userTime;
                     _prevCpuSampleTime = DateTime.UtcNow;
-                    return 0;
+                    return -1.0;
                 }
 
                 long usrDelta = userTime - _prevUserTime;
@@ -420,30 +426,139 @@ namespace BiosOptimizer.GUI.Services
         {
             try
             {
-                if (_cachedGpuInfo == null || (DateTime.UtcNow - _lastGpuDetection).TotalMinutes > 10.0)
+                if (_cachedDxgiAdapters == null || (DateTime.UtcNow - _lastGpuDetection).TotalSeconds > 60.0)
                 {
-                    var gpuList = new List<GpuTelemetryItem>();
-                    var hw = GpuRegistryValueEngine.Instance.DetectGpuHardware(false);
-                    if (!string.IsNullOrEmpty(hw.Name))
+                    try
                     {
-                        gpuList.Add(new GpuTelemetryItem
+                        var adapters = DxgiGpuReader.EnumerateAdapters();
+                        if (adapters != null && adapters.Count > 0)
                         {
-                            Name = hw.Name,
-                            PhysicalIndex = 0,
-                            DedicatedMemoryTotalMb = 6144,
-                            Utilization = 0
-                        });
+                            _cachedDxgiAdapters = adapters;
+                        }
                     }
-                    else
-                    {
-                        gpuList.Add(new GpuTelemetryItem { Name = "Display GPU", PhysicalIndex = 0 });
-                    }
+                    catch { }
 
-                    _cachedGpuInfo = gpuList;
                     _lastGpuDetection = DateTime.UtcNow;
                 }
 
-                return _cachedGpuInfo;
+                if (_gpuCategory == null)
+                {
+                    try
+                    {
+                        if (PerformanceCounterCategory.Exists("GPU Engine"))
+                        {
+                            _gpuCategory = new PerformanceCounterCategory("GPU Engine");
+                        }
+                    }
+                    catch { }
+                }
+
+                int adapterCount = _cachedDxgiAdapters?.Count ?? 0;
+                var gpuLoads = new Dictionary<int, double>();
+                for (int i = 0; i < Math.Max(1, adapterCount); i++) gpuLoads[i] = 0;
+
+                if (_gpuCategory != null && adapterCount > 0)
+                {
+                    try
+                    {
+                        if ((DateTime.UtcNow - _lastGpuCountersUpdate).TotalSeconds > 15.0 || _cachedGpuCounters.Count == 0)
+                        {
+                            var instances = _gpuCategory.GetInstanceNames();
+                            var eng3D = instances.Where(i => i.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                            foreach (var item in _cachedGpuCounters) { try { item.Counter.Dispose(); } catch { } }
+                            _cachedGpuCounters.Clear();
+
+                            var luidRegex = new Regex(@"luid_(0x[0-9a-fA-F]+_0x[0-9a-fA-F]+)", RegexOptions.IgnoreCase);
+                            var physRegex = new Regex(@"phys_(\d+)", RegexOptions.IgnoreCase);
+
+                            foreach (var inst in eng3D)
+                            {
+                                try
+                                {
+                                    int targetIdx = -1;
+                                    var m = luidRegex.Match(inst);
+                                    if (m.Success)
+                                    {
+                                        string luid = m.Groups[1].Value;
+                                        for (int a = 0; a < _cachedDxgiAdapters!.Count; a++)
+                                        {
+                                            if (string.Equals(_cachedDxgiAdapters[a].AdapterLuidHex, luid, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                targetIdx = a;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (targetIdx < 0)
+                                    {
+                                        var pm = physRegex.Match(inst);
+                                        if (pm.Success && int.TryParse(pm.Groups[1].Value, out int pIdx))
+                                        {
+                                            targetIdx = pIdx < adapterCount ? pIdx : 0;
+                                        }
+                                    }
+
+                                    if (targetIdx >= 0)
+                                    {
+                                        var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst);
+                                        pc.NextValue();
+                                        _cachedGpuCounters.Add((targetIdx, pc));
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            _lastGpuCountersUpdate = DateTime.UtcNow;
+                        }
+
+                        foreach (var item in _cachedGpuCounters)
+                        {
+                            try
+                            {
+                                double val = item.Counter.NextValue();
+                                int targetIdx = item.TargetIndex < adapterCount ? item.TargetIndex : 0;
+                                if (!gpuLoads.ContainsKey(targetIdx)) gpuLoads[targetIdx] = 0;
+                                gpuLoads[targetIdx] += val;
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                }
+
+                var gpuList = new List<GpuTelemetryItem>();
+                if (_cachedDxgiAdapters != null && _cachedDxgiAdapters.Count > 0)
+                {
+                    for (int i = 0; i < _cachedDxgiAdapters.Count; i++)
+                    {
+                        var a = _cachedDxgiAdapters[i];
+                        double load = gpuLoads.TryGetValue(i, out var l) ? Math.Min(100.0, Math.Round(l, 1)) : 0;
+                        gpuList.Add(new GpuTelemetryItem
+                        {
+                            Name = a.Description,
+                            PhysicalIndex = i,
+                            DedicatedMemoryTotalMb = a.DedicatedVideoMemoryBytes / (1024 * 1024),
+                            Utilization = load
+                        });
+                    }
+                }
+                else
+                {
+                    var hw = GpuRegistryValueEngine.Instance.DetectGpuHardware(false);
+                    string gName = !string.IsNullOrEmpty(hw.Name) ? hw.Name : "Display GPU";
+                    gpuList.Add(new GpuTelemetryItem
+                    {
+                        Name = gName,
+                        PhysicalIndex = 0,
+                        DedicatedMemoryTotalMb = 6144,
+                        Utilization = 0
+                    });
+                }
+
+                _cachedGpuInfo = gpuList;
+                return gpuList;
             }
             catch
             {

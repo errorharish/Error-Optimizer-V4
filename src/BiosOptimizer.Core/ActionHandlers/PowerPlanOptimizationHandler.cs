@@ -58,6 +58,21 @@ public class PowerPlanOptimizationHandler : IActionHandler
 
         string guidToApply = match?.Guid ?? targetGuid;
 
+        // 2. Capture and verify before state in Universal Backup Manager BEFORE activating or creating any scheme
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CapturePowerPlanTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            targetName,
+            currentGuidStr,
+            guidToApply,
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+        {
+            result.Status = ResultStatus.Failed;
+            result.Message = bkErr;
+            return result;
+        }
+
         // If target is Ultimate Performance and not yet installed, enable it
         if ((match == null || !match.IsInstalled) && targetGuid.Equals(PowerPlanEngine.UltimatePerformanceGuid, StringComparison.OrdinalIgnoreCase))
         {
@@ -69,19 +84,6 @@ public class PowerPlanOptimizationHandler : IActionHandler
                 return result;
             }
         }
-
-        // 3. Capture before state into Universal Backup Manager
-        try
-        {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CapturePowerPlanTweak(
-                "Manual",
-                targetName,
-                currentGuidStr,
-                guidToApply,
-                "SAFE"
-            );
-        }
-        catch { }
 
         // Apply and Verify via canonical PowerPlanEngine
         var applyRes = PowerPlanEngine.Instance.ApplyPowerPlanAsync(guidToApply, PowerPlanChangeSource.USER_REQUEST).GetAwaiter().GetResult();

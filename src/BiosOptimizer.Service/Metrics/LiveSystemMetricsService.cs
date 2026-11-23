@@ -8,6 +8,8 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using BiosOptimizer.Core.Implementations;
+using BiosOptimizer.Core.Implementations.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -19,6 +21,7 @@ namespace BiosOptimizer.Service.Metrics
         
         public static LiveMetricsPayload CurrentMetrics { get; private set; } = new LiveMetricsPayload();
 
+        private List<DxgiAdapterInfo> _cachedAdapters = new();
         private List<string> _cachedGpuNames = new();
         private DateTime _lastGpuDetect = DateTime.MinValue;
         private PerformanceCounterCategory? _gpuCategory;
@@ -151,24 +154,14 @@ namespace BiosOptimizer.Service.Metrics
                     }
 
                     double storagePercentage = 0;
-                    string storageInfo = "All Drives";
+                    string storageInfo = "No fixed storage";
                     try
                     {
-                        var drives = DriveInfo.GetDrives()
-                            .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
-                            .ToList();
-                            
-                        if (drives.Count > 0)
+                        var agg = BiosOptimizer.Core.Implementations.Storage.StorageEngine.ComputeFastFixedVolumeAggregate();
+                        if (agg.VolumeCount > 0 && agg.UnifiedTotalBytes > 0)
                         {
-                            long totalSize = drives.Sum(d => d.TotalSize);
-                            long totalFree = drives.Sum(d => d.TotalFreeSpace);
-                            
-                            if (totalSize > 0)
-                            {
-                                double usedSpace = totalSize - totalFree;
-                                storagePercentage = Math.Round((usedSpace / totalSize) * 100, 1);
-                                storageInfo = $"{(usedSpace / (1024.0*1024*1024)):F1} GB / {(totalSize / (1024.0*1024*1024)):F1} GB";
-                            }
+                            storagePercentage = agg.UnifiedUsagePercent;
+                            storageInfo = $"{agg.UnifiedUsedGb:F1} GB / {agg.UnifiedTotalGb:F1} GB";
                         }
                     }
                     catch { }
@@ -191,10 +184,9 @@ namespace BiosOptimizer.Service.Metrics
                         try { netUploadBps += counter.NextValue(); } catch { }
                     }
 
-                    // 5. Multi-GPU Metrics
-                    var gpuMetrics = GetGpuMetrics();
-
-                    string powerPlan = GetActivePowerPlan();
+                    var kernelSnap = BiosOptimizer.Core.Implementations.Diagnostics.HardwareTelemetryCollector.Instance.CollectSnapshot();
+                    if (kernelSnap.CpuTempC.HasValue && kernelSnap.CpuTempC.Value > 0)
+                        cpuTemp = kernelSnap.CpuTempC.Value;
 
                     int processCount = 0;
                     int threadCount = 0;
@@ -202,15 +194,29 @@ namespace BiosOptimizer.Service.Metrics
                     {
                         var procs = Process.GetProcesses();
                         processCount = procs.Length;
-                        threadCount = procs.Sum(p => { try { return p.Threads.Count; } catch { return 1; } });
+                        foreach (var proc in procs)
+                        {
+                            try { threadCount += proc.Threads.Count; } catch { threadCount++; }
+                            try { proc.Dispose(); } catch { }
+                        }
                     }
-                    catch { processCount = 150; threadCount = 2000; }
+                    catch { }
+
+                    // 5. Multi-GPU Metrics (combine PDH 3D counters + DXGI live VRAM + NVML temps/util)
+                    var gpuMetrics = GetGpuMetrics(kernelSnap);
+
+                    string powerPlan = GetActivePowerPlan();
 
                     CurrentMetrics = new LiveMetricsPayload
                     {
                         CpuUtilization = cpuUsage,
                         CpuFrequencyGhz = Math.Round(cpuFreqGhz, 2),
-                        CpuTemperatureC = Math.Round(cpuTemp, 1),
+                        CpuTemperatureC = cpuTemp > 0 ? Math.Round(cpuTemp, 1) : 0,
+                        HasCpuTemperature = cpuTemp > 0,
+                        CpuTemperatureSource = kernelSnap.CpuTempSource,
+                        SsdTemperatureC = kernelSnap.SsdTempC,
+                        SsdTemperatureSource = kernelSnap.SsdTempSource,
+                        DpcLatencyUs = kernelSnap.DpcUs,
                         RamTotalMb = totalRamMb,
                         RamAvailableMb = availRamMb,
                         RamUsedMb = usedRamMb,
@@ -338,40 +344,61 @@ namespace BiosOptimizer.Service.Metrics
 
 
         private DateTime _lastGpuInstanceUpdate = DateTime.MinValue;
-        private List<(int PhysIndex, PerformanceCounter Counter)> _cachedGpuCounters = new();
+        private List<(int PhysIndex, string InstanceName, PerformanceCounter Counter)> _cachedGpuCounters = new();
 
-        private List<GpuMetric> GetGpuMetrics()
+        private List<GpuMetric> GetGpuMetrics(BiosOptimizer.Core.Implementations.Diagnostics.KernelTelemetrySnapshot? kernelSnap = null)
         {
             var gpus = new List<GpuMetric>();
             try
             {
-                // Refresh GPU names every 60s
-                if ((DateTime.UtcNow - _lastGpuDetect).TotalSeconds > 60 || _cachedGpuNames.Count == 0)
+                // Refresh DXGI adapters on interval so DedicatedVramUsageBytes stays fresh
+                if ((DateTime.UtcNow - _lastGpuDetect).TotalSeconds > 60 || (_cachedAdapters.Count == 0 && _cachedGpuNames.Count == 0))
                 {
-                    var names = new List<string>();
-                    using var searcher = new ManagementObjectSearcher("select Name, AdapterRAM from Win32_VideoController");
-                    foreach (var obj in searcher.Get())
+                    try
                     {
-                        var n = obj["Name"]?.ToString();
-                        if (!string.IsNullOrWhiteSpace(n) && !n.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+                        var dxgiList = DxgiGpuReader.EnumerateAdapters();
+                        if (dxgiList != null && dxgiList.Count > 0)
                         {
-                            names.Add(n);
+                            _cachedAdapters = dxgiList;
                         }
                     }
-                    if (names.Count > 0)
+                    catch { }
+
+                    if (_cachedAdapters.Count == 0)
                     {
+                        var names = new List<string>();
+                        try
+                        {
+                            using var searcher = new ManagementObjectSearcher("select Name from Win32_VideoController");
+                            foreach (var obj in searcher.Get())
+                            {
+                                var n = obj["Name"]?.ToString();
+                                if (!string.IsNullOrWhiteSpace(n) && !n.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    names.Add(n);
+                                }
+                            }
+                        }
+                        catch { }
+
                         _cachedGpuNames = names;
                     }
-                    else if (_cachedGpuNames.Count == 0)
-                    {
-                        _cachedGpuNames = new List<string> { "GPU" };
-                    }
+
                     _lastGpuDetect = DateTime.UtcNow;
                 }
-                
-                // Real GPU utilization via GPU Engine performance counters per physical adapter
+                else if (_cachedAdapters.Count > 0)
+                {
+                    try
+                    {
+                        var liveDxgi = DxgiGpuReader.EnumerateAdapters();
+                        if (liveDxgi.Count > 0) _cachedAdapters = liveDxgi;
+                    }
+                    catch { }
+                }
+
+                int gpuCount = _cachedAdapters.Count > 0 ? _cachedAdapters.Count : _cachedGpuNames.Count;
                 var gpuLoads = new Dictionary<int, double>();
-                for (int i = 0; i < _cachedGpuNames.Count; i++)
+                for (int i = 0; i < gpuCount; i++)
                 {
                     gpuLoads[i] = 0;
                 }
@@ -380,59 +407,95 @@ namespace BiosOptimizer.Service.Metrics
                 {
                     try
                     {
-                        // Refresh counter instances every 15s
+                        // Refresh counter instances every 15s using canonical WDDM engine queues (not raw 3D PID sum)
                         if ((DateTime.UtcNow - _lastGpuInstanceUpdate).TotalSeconds > 15 || _cachedGpuCounters.Count == 0)
                         {
                             var instances = _gpuCategory.GetInstanceNames();
-                            var eng3D = instances.Where(i => i.Contains("engtype_3D")).ToList();
-                            
+                            var engineInstances = instances
+                                .Where(i => i.Contains("engtype_", StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+
                             foreach (var item in _cachedGpuCounters) { try { item.Counter.Dispose(); } catch { } }
                             _cachedGpuCounters.Clear();
 
-                            foreach (var inst in eng3D)
+                            foreach (var inst in engineInstances)
                             {
                                 try
                                 {
-                                    int physIdx = 0;
-                                    var match = Regex.Match(inst, @"phys_(\d+)");
-                                    if (match.Success && int.TryParse(match.Groups[1].Value, out int parsed))
+                                    int targetIdx = GpuTelemetryHelper.ResolveAdapterIndex(inst, _cachedAdapters, gpuCount);
+                                    if (targetIdx >= 0)
                                     {
-                                        physIdx = parsed;
+                                        var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst);
+                                        pc.NextValue();
+                                        _cachedGpuCounters.Add((targetIdx, inst, pc));
                                     }
-
-                                    var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst);
-                                    pc.NextValue();
-                                    _cachedGpuCounters.Add((physIdx, pc));
                                 }
                                 catch { }
                             }
                             _lastGpuInstanceUpdate = DateTime.UtcNow;
                         }
 
+                        var pdhSamples = new List<(int AdapterIndex, string InstanceName, double Utilization)>(_cachedGpuCounters.Count);
                         foreach (var item in _cachedGpuCounters)
                         {
                             try
                             {
                                 double val = item.Counter.NextValue();
-                                int targetIdx = item.PhysIndex < _cachedGpuNames.Count ? item.PhysIndex : 0;
-                                if (!gpuLoads.ContainsKey(targetIdx)) gpuLoads[targetIdx] = 0;
-                                gpuLoads[targetIdx] += val;
+                                int targetIdx = item.PhysIndex < gpuCount ? item.PhysIndex : 0;
+                                pdhSamples.Add((targetIdx, item.InstanceName, val));
                             }
                             catch { }
+                        }
+
+                        foreach (var kv in GpuTelemetryHelper.AggregateByAdapterIndex(pdhSamples))
+                        {
+                            gpuLoads[kv.Key] = kv.Value;
                         }
                     }
                     catch { }
                 }
 
-                for (int i = 0; i < _cachedGpuNames.Count; i++)
+                if (_cachedAdapters.Count > 0)
                 {
-                    double load = gpuLoads.TryGetValue(i, out var l) ? Math.Min(100.0, Math.Round(l, 1)) : 0;
-                    gpus.Add(new GpuMetric
+                    for (int i = 0; i < _cachedAdapters.Count; i++)
                     {
-                        Name = _cachedGpuNames[i],
-                        Utilization = load,
-                        PhysicalIndex = i
-                    });
+                        var ad = _cachedAdapters[i];
+                        bool matchedKernel = kernelSnap != null && !string.IsNullOrEmpty(kernelSnap.GpuDevice) &&
+                            string.Equals(ad.Description, kernelSnap.GpuDevice, StringComparison.OrdinalIgnoreCase);
+                        double load = (matchedKernel && kernelSnap?.GpuUtilPct.HasValue == true)
+                            ? Math.Round(Math.Clamp(kernelSnap.GpuUtilPct.Value, 0.0, 100.0), 1)
+                            : (gpuLoads.TryGetValue(i, out var l) ? Math.Clamp(Math.Round(l, 1), 0.0, 100.0) : 0);
+
+                        double vramUsedMb = ad.DedicatedVramUsageBytes > 0
+                            ? Math.Round(ad.DedicatedVramUsageBytes / (1024.0 * 1024.0), 0)
+                            : (matchedKernel && kernelSnap?.GpuVramUsedMb.HasValue == true ? kernelSnap.GpuVramUsedMb.Value : 0);
+
+                        gpus.Add(new GpuMetric
+                        {
+                            Name = ad.Description,
+                            Utilization = load,
+                            PhysicalIndex = i,
+                            DedicatedMemoryUsedMb = vramUsedMb,
+                            DedicatedMemoryTotalMb = ad.DedicatedVideoMemoryBytes / (1024.0 * 1024.0),
+                            TemperatureC = matchedKernel && kernelSnap?.GpuTempC is > 0.1 and < 150.0
+                                ? Math.Round(kernelSnap.GpuTempC.Value, 1)
+                                : 0
+                        });
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < _cachedGpuNames.Count; i++)
+                    {
+                        double load = gpuLoads.TryGetValue(i, out var l) ? Math.Min(100.0, Math.Round(l, 1)) : 0;
+                        gpus.Add(new GpuMetric
+                        {
+                            Name = _cachedGpuNames[i],
+                            Utilization = load,
+                            PhysicalIndex = i,
+                            DedicatedMemoryTotalMb = 0
+                        });
+                    }
                 }
             }
             catch
@@ -447,6 +510,11 @@ namespace BiosOptimizer.Service.Metrics
         public double CpuUtilization { get; set; }
         public double CpuFrequencyGhz { get; set; }
         public double CpuTemperatureC { get; set; }
+        public bool HasCpuTemperature { get; set; }
+        public string? CpuTemperatureSource { get; set; }
+        public double? SsdTemperatureC { get; set; }
+        public string? SsdTemperatureSource { get; set; }
+        public double? DpcLatencyUs { get; set; }
         public ulong RamTotalMb { get; set; }
         public ulong RamAvailableMb { get; set; }
         public ulong RamUsedMb { get; set; }

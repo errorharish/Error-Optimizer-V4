@@ -2,7 +2,9 @@
   "id": "AaaGaming",
   "displayName": "AAA Gaming",
   "description": "Advanced gaming optimization. Disables background processes, enables HAGS, maximizes GPU performance policy, disables network throttling and telemetry. Workload-aware: protects Steam, Epic, Battle.net, Xbox/Game Pass services.",
-  "extends": ["Pro"],
+  "extends": [
+    "Pro"
+  ],
   "targetProcessReduction": {
     "min": 60,
     "max": 100
@@ -15,12 +17,19 @@
       "action": "SetPowerPlan",
       "target": "e9a42b02-d5df-448d-aa00-03f14749eb61",
       "value": "e9a42b02-d5df-448d-aa00-03f14749eb61",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -32,7 +41,10 @@
       "action": "SetHags",
       "target": "HwSchMode",
       "value": 2,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Requires DirectX 12 capable GPU.",
@@ -47,7 +59,10 @@
       "action": "SetForegroundPriority",
       "target": "Win32PrioritySeparation",
       "value": 38,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
@@ -62,13 +77,24 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Global\\NvCplHorizontalPageFiles\\PowerMizerEnable",
       "value": 1,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "NVIDIA GPU only. Sets GPU to maximum performance policy.",
       "conditions": [
-        { "type": "HasNvidiaGpu", "operator": "Equals", "value": true },
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "HasNvidiaGpu",
+          "operator": "Equals",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -79,8 +105,11 @@
       "category": "Registry",
       "action": "SetRegistryValue",
       "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\SystemResponsiveness",
-      "value": 0,
-      "os": ["win10", "win11"],
+      "value": 10,
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
@@ -95,12 +124,19 @@
       "action": "SetServiceStartup",
       "target": "SysMain",
       "value": "Disabled",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "",
       "conditions": [
-        { "type": "StorageIsSsd", "operator": "Equals", "value": true }
+        {
+          "type": "StorageIsSsd",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"

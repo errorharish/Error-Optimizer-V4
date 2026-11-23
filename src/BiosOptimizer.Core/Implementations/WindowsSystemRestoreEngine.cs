@@ -7,6 +7,9 @@ using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text.Json;
+using System.Threading;
+using BiosOptimizer.Core.Common;
 using Microsoft.Win32;
 
 namespace BiosOptimizer.Core.Implementations
@@ -50,6 +53,144 @@ namespace BiosOptimizer.Core.Implementations
     {
         private static readonly Lazy<WindowsSystemRestoreEngine> _instance = new(() => new WindowsSystemRestoreEngine());
         public static WindowsSystemRestoreEngine Instance => _instance.Value;
+
+        private readonly object _flightLock = new();
+        private readonly Dictionary<string, Lazy<RestorePointExecutionResult>> _inFlightCreations = new(StringComparer.OrdinalIgnoreCase);
+
+        private sealed class RestoreMutexLease : IDisposable
+        {
+            private static readonly SemaphoreSlim InProcessGate = new(1, 1);
+            private FileStream? _crossProcessLockStream;
+            private bool _gateHeld;
+            public bool Acquired { get; private set; }
+
+            public static RestoreMutexLease Acquire(TimeSpan timeout)
+            {
+                var lease = new RestoreMutexLease();
+                var sw = Stopwatch.StartNew();
+
+                if (!InProcessGate.Wait(timeout))
+                    return lease;
+                lease._gateHeld = true;
+
+                string lockPath = Path.Combine(AppEnvironment.ResolveWritableDataDirectory(), "restore-point.lock");
+                try { Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!); } catch { }
+
+                while (true)
+                {
+                    try
+                    {
+                        lease._crossProcessLockStream = new FileStream(
+                            lockPath,
+                            FileMode.OpenOrCreate,
+                            FileAccess.ReadWrite,
+                            FileShare.None);
+                        lease.Acquired = true;
+                        return lease;
+                    }
+                    catch (IOException)
+                    {
+                        if (sw.Elapsed >= timeout)
+                        {
+                            lease.Dispose();
+                            return new RestoreMutexLease();
+                        }
+                        System.Threading.Thread.Sleep(150);
+                    }
+                    catch
+                    {
+                        // If filesystem lock cannot be opened, fall back safely to in-process exclusive gate
+                        lease.Acquired = true;
+                        return lease;
+                    }
+                }
+            }
+
+            public void Dispose()
+            {
+                if (_crossProcessLockStream != null)
+                {
+                    try { _crossProcessLockStream.Dispose(); } catch { }
+                    _crossProcessLockStream = null;
+                }
+                if (_gateHeld)
+                {
+                    _gateHeld = false;
+                    try { InProcessGate.Release(); } catch { }
+                }
+                Acquired = false;
+            }
+        }
+
+        private sealed record RestoreFlightRecord(
+            string Description,
+            int Pid,
+            DateTime StartedAtUtc,
+            DateTime? CompletedAtUtc,
+            RestorePointExecutionResult? Result);
+
+        private static string GetRestoreFlightPath()
+            => Path.Combine(AppEnvironment.ResolveWritableDataDirectory(), "restore-point-flight.json");
+
+        private static RestoreFlightRecord? TryReadFlightRecord()
+        {
+            try
+            {
+                string path = GetRestoreFlightPath();
+                if (!File.Exists(path)) return null;
+                return JsonSerializer.Deserialize<RestoreFlightRecord>(File.ReadAllText(path));
+            }
+            catch { return null; }
+        }
+
+        private static void WriteFlightRecord(RestoreFlightRecord record)
+        {
+            try
+            {
+                string path = GetRestoreFlightPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, JsonSerializer.Serialize(record));
+            }
+            catch { }
+        }
+
+        #region Test Injection & Safety Guards
+
+        public static Func<string?, RestorePointExecutionResult>? CreateRestorePointHandler { get; set; }
+        public static Func<string?, (bool IsEnabled, string SystemDrive, string StatusReason)>? CheckSystemProtectionStatusHandler { get; set; }
+        public static Func<string?, (bool Success, string Message)>? EnableSystemProtectionHandler { get; set; }
+        public static Func<string?, (bool Success, string Message)>? DisableSystemProtectionHandler { get; set; }
+        public static Func<List<SystemRestorePointItem>>? EnumerateRestorePointsHandler { get; set; }
+
+        public static void ResetTestHooks()
+        {
+            CreateRestorePointHandler = null;
+            CheckSystemProtectionStatusHandler = null;
+            EnableSystemProtectionHandler = null;
+            DisableSystemProtectionHandler = null;
+            EnumerateRestorePointsHandler = null;
+        }
+
+        public static bool IsTestExecutionEnvironment()
+        {
+            try
+            {
+                return AppDomain.CurrentDomain.GetAssemblies()
+                    .Any(a => {
+                        var name = a.GetName().Name;
+                        return name != null && (
+                            name.Contains("xunit", StringComparison.OrdinalIgnoreCase) ||
+                            name.Contains("testhost", StringComparison.OrdinalIgnoreCase) ||
+                            name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
+                    });
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
 
         #region Native Definitions & Win32 Interop
 
@@ -226,6 +367,11 @@ namespace BiosOptimizer.Core.Implementations
 
         public (bool IsEnabled, string SystemDrive, string StatusReason) CheckSystemProtectionStatus(string? drive = null)
         {
+            if (CheckSystemProtectionStatusHandler != null)
+            {
+                return CheckSystemProtectionStatusHandler(drive);
+            }
+
             string sysDrive = string.IsNullOrWhiteSpace(drive)
                 ? (Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:")
                 : drive.Trim().TrimEnd('\\');
@@ -325,6 +471,22 @@ namespace BiosOptimizer.Core.Implementations
 
         public (bool Success, string Message) EnableSystemProtection(string? drive = null)
         {
+            if (EnableSystemProtectionHandler != null)
+            {
+                return EnableSystemProtectionHandler(drive);
+            }
+
+            if (IsTestExecutionEnvironment())
+            {
+                throw new InvalidOperationException("UNSAFE TEST MUTATION BLOCKED: Live Windows System Protection modification blocked in test runner environment. Inject WindowsSystemRestoreEngine.EnableSystemProtectionHandler before invoking.");
+            }
+
+            using var mutexLease = RestoreMutexLease.Acquire(TimeSpan.FromSeconds(75));
+            if (!mutexLease.Acquired)
+            {
+                return (false, "Timed out waiting for another active System Restore operation to finish.");
+            }
+
             string sysDrive = string.IsNullOrWhiteSpace(drive)
                 ? (Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:")
                 : drive.Trim().TrimEnd('\\');
@@ -409,15 +571,22 @@ namespace BiosOptimizer.Core.Implementations
                     using var proc = Process.Start(psi);
                     if (proc != null)
                     {
-                        proc.WaitForExit(15000);
-                        if (proc.ExitCode == 0)
+                        if (!proc.WaitForExit(15000))
+                        {
+                            try { proc.Kill(entireProcessTree: true); } catch { }
+                            lastError = "Enable-ComputerRestore timed out after 15 seconds.";
+                        }
+                        else if (proc.ExitCode == 0)
                         {
                             wmiInvoked = true;
                         }
                         else
                         {
-                            string err = proc.StandardError.ReadToEnd();
-                            lastError = string.IsNullOrWhiteSpace(err) ? $"PowerShell exit code {proc.ExitCode}" : err;
+                            string stderr = "";
+                            try { stderr = proc.StandardError.ReadToEnd(); } catch { }
+                            lastError = string.IsNullOrWhiteSpace(stderr)
+                                ? $"PowerShell exit code {proc.ExitCode}"
+                                : stderr.Trim();
                         }
                     }
                 }
@@ -459,6 +628,16 @@ namespace BiosOptimizer.Core.Implementations
 
         public (bool Success, string Message) DisableSystemProtection(string? drive = null)
         {
+            if (DisableSystemProtectionHandler != null)
+            {
+                return DisableSystemProtectionHandler(drive);
+            }
+
+            if (IsTestExecutionEnvironment())
+            {
+                throw new InvalidOperationException("UNSAFE TEST MUTATION BLOCKED: Live Windows System Protection modification blocked in test runner environment. Inject WindowsSystemRestoreEngine.DisableSystemProtectionHandler before invoking.");
+            }
+
             string sysDrive = string.IsNullOrWhiteSpace(drive)
                 ? (Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:")
                 : drive.Trim().TrimEnd('\\');
@@ -531,12 +710,24 @@ namespace BiosOptimizer.Core.Implementations
 
         public List<SystemRestorePointItem> EnumerateRestorePoints()
         {
+            if (EnumerateRestorePointsHandler != null)
+            {
+                return EnumerateRestorePointsHandler();
+            }
+
+            if (IsTestExecutionEnvironment())
+            {
+                // In test execution without an explicit handler, return empty list without querying physical WMI
+                return new List<SystemRestorePointItem>();
+            }
+
             var results = new List<SystemRestorePointItem>();
             try
             {
                 var scope = new ManagementScope(@"\\.\root\default");
                 var query = new ObjectQuery("SELECT * FROM SystemRestore");
-                using var searcher = new ManagementObjectSearcher(scope, query);
+                var opts = new System.Management.EnumerationOptions { Timeout = TimeSpan.FromSeconds(5), ReturnImmediately = true };
+                using var searcher = new ManagementObjectSearcher(scope, query, opts);
 
                 foreach (ManagementObject mo in searcher.Get())
                 {
@@ -585,6 +776,129 @@ namespace BiosOptimizer.Core.Implementations
 
         public RestorePointExecutionResult CreateRestorePoint(string? customName = null)
         {
+            if (CreateRestorePointHandler != null)
+            {
+                return CreateRestorePointHandler(customName);
+            }
+
+            if (IsTestExecutionEnvironment())
+            {
+                throw new InvalidOperationException("UNSAFE TEST MUTATION BLOCKED: Live Windows System Restore / VSS operation blocked in test runner environment. Inject WindowsSystemRestoreEngine.CreateRestorePointHandler before invoking.");
+            }
+
+            string normalizedName = string.IsNullOrWhiteSpace(customName)
+                ? $"Error Optimizer V3 - {DateTime.Now:yyyy-MM-dd HH:mm}"
+                : customName.Trim();
+            if (normalizedName.Length > 250) normalizedName = normalizedName[..250];
+            DateTime callStartUtc = DateTime.UtcNow;
+
+            // In-process single-flight deduplication for concurrent callers targeting the same description
+            Lazy<RestorePointExecutionResult> flight;
+            lock (_flightLock)
+            {
+                if (!_inFlightCreations.TryGetValue(normalizedName, out flight!))
+                {
+                    flight = new Lazy<RestorePointExecutionResult>(
+                        () => ExecuteCreateRestorePointCrossProcess(normalizedName, callStartUtc),
+                        LazyThreadSafetyMode.ExecutionAndPublication);
+                    _inFlightCreations[normalizedName] = flight;
+                }
+            }
+
+            try
+            {
+                return flight.Value;
+            }
+            finally
+            {
+                lock (_flightLock)
+                {
+                    if (_inFlightCreations.TryGetValue(normalizedName, out var existing) && ReferenceEquals(existing, flight))
+                        _inFlightCreations.Remove(normalizedName);
+                }
+            }
+        }
+
+        private RestorePointExecutionResult ExecuteCreateRestorePointCrossProcess(string normalizedName, DateTime callStartUtc)
+        {
+            using var mutexLease = RestoreMutexLease.Acquire(TimeSpan.FromSeconds(105));
+            if (!mutexLease.Acquired)
+            {
+                return new RestorePointExecutionResult
+                {
+                    Status = RestorePointStatus.CreationFailed,
+                    Description = normalizedName,
+                    ErrorMessage = "Timed out waiting for another in-progress Windows System Restore creation."
+                };
+            }
+
+            // Cross-process correlation: if another process (e.g. Host or Service) was concurrently executing
+            // an identical restore point request and finished while we waited on the mutex, reuse its verified result.
+            var recent = TryReadFlightRecord();
+            if (recent != null &&
+                recent.Result != null &&
+                recent.CompletedAtUtc.HasValue &&
+                recent.CompletedAtUtc.Value >= callStartUtc.AddSeconds(-5) &&
+                string.Equals(recent.Description, normalizedName, StringComparison.OrdinalIgnoreCase) &&
+                recent.Result.Status is RestorePointStatus.CreatedAndVerified or RestorePointStatus.SkippedByPolicy)
+            {
+                return recent.Result;
+            }
+
+            WriteFlightRecord(new RestoreFlightRecord(normalizedName, Environment.ProcessId, callStartUtc, null, null));
+            RestorePointExecutionResult finalResult;
+
+            if (System.Threading.Thread.CurrentThread.GetApartmentState() != System.Threading.ApartmentState.MTA)
+            {
+                RestorePointExecutionResult? mtaResult = null;
+                Exception? mtaError = null;
+                var mtaThread = new System.Threading.Thread(() =>
+                {
+                    try { mtaResult = CreateRestorePointCore(normalizedName); }
+                    catch (Exception ex) { mtaError = ex; }
+                })
+                {
+                    IsBackground = true,
+                    Name = "EO-CreateRestorePoint-MTA"
+                };
+                mtaThread.SetApartmentState(System.Threading.ApartmentState.MTA);
+                mtaThread.Start();
+                if (!mtaThread.Join(TimeSpan.FromSeconds(95)))
+                {
+                    finalResult = new RestorePointExecutionResult
+                    {
+                        Status = RestorePointStatus.CreationFailed,
+                        Description = normalizedName,
+                        ErrorMessage = "Timed out after 95s waiting for Windows System Restore / VSS."
+                    };
+                    WriteFlightRecord(new RestoreFlightRecord(normalizedName, Environment.ProcessId, callStartUtc, DateTime.UtcNow, finalResult));
+                    return finalResult;
+                }
+                if (mtaError != null)
+                {
+                    finalResult = new RestorePointExecutionResult
+                    {
+                        Status = RestorePointStatus.CreationFailed,
+                        Description = normalizedName,
+                        ErrorMessage = mtaError.Message
+                    };
+                    WriteFlightRecord(new RestoreFlightRecord(normalizedName, Environment.ProcessId, callStartUtc, DateTime.UtcNow, finalResult));
+                    return finalResult;
+                }
+                finalResult = mtaResult!;
+            }
+            else
+            {
+                finalResult = CreateRestorePointCore(normalizedName);
+            }
+
+            WriteFlightRecord(new RestoreFlightRecord(normalizedName, Environment.ProcessId, callStartUtc, DateTime.UtcNow, finalResult));
+            return finalResult;
+        }
+
+        private RestorePointExecutionResult CreateRestorePointCore(string? customName)
+        {
+
             string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:";
             string name = string.IsNullOrWhiteSpace(customName)
                 ? $"Error Optimizer V3 - {DateTime.Now:yyyy-MM-dd HH:mm}"
@@ -656,8 +970,9 @@ namespace BiosOptimizer.Core.Implementations
                 diagLogs.Add($"[POLICY] Frequency registry access warning: {ex.Message}");
             }
 
-            // 6. Initialize COM for System Restore API
+            // 6. Initialize COM for System Restore API (only call CoUninitialize when CoInitializeEx succeeded: S_OK=0 or S_FALSE=1)
             int coInitHr = CoInitializeEx(IntPtr.Zero, 0 /* COINIT_MULTITHREADED */);
+            bool shouldCoUninit = coInitHr == 0 || coInitHr == 1;
             int coSecHr = CoInitializeSecurity(IntPtr.Zero, -1, IntPtr.Zero, IntPtr.Zero, 0, 3, IntPtr.Zero, 0, IntPtr.Zero);
             diagLogs.Add($"[COM] CoInitializeEx: 0x{coInitHr:X8}, CoInitializeSecurity: 0x{coSecHr:X8}");
 
@@ -780,7 +1095,8 @@ namespace BiosOptimizer.Core.Implementations
                     catch { }
                 }
 
-                CoUninitialize();
+                if (shouldCoUninit)
+                    CoUninitialize();
             }
 
             // 7. Independent Windows Readback Verification
@@ -790,11 +1106,11 @@ namespace BiosOptimizer.Core.Implementations
             {
                 var currentPoints = EnumerateRestorePoints();
 
-                // Match by exact captured sequence number, or new sequence > maxExistingSeq, or matching description
+                // Match only new points created during this invocation (exact sequence or sequence > pre-call max)
                 verifiedItem = currentPoints.FirstOrDefault(p =>
-                    (capturedSequenceNumber > 0 && p.SequenceNumber == capturedSequenceNumber) ||
+                    (capturedSequenceNumber > 0 && p.SequenceNumber == capturedSequenceNumber && p.SequenceNumber > maxExistingSeq) ||
                     (p.SequenceNumber > maxExistingSeq && string.Equals(p.Description, name, StringComparison.OrdinalIgnoreCase)) ||
-                    (p.CreationTimeUtc >= startTimeUtc && string.Equals(p.Description, name, StringComparison.OrdinalIgnoreCase))
+                    (p.SequenceNumber > maxExistingSeq && p.CreationTimeUtc >= startTimeUtc && string.Equals(p.Description, name, StringComparison.OrdinalIgnoreCase))
                 );
 
                 if (verifiedItem != null)

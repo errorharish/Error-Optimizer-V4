@@ -15,6 +15,17 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AssemblyTitle>ERROR OPTIMIZER V4 CLI</AssemblyTitle>
+    <Product>ERROR OPTIMIZER V4</Product>
+    <Company>Error Optimizer Team</Company>
+    <Description>ERROR OPTIMIZER V4 Command Line Interface</Description>
+    <Version>4.0.5</Version>
+    <FileVersion>4.0.5.0</FileVersion>
+    <AssemblyVersion>4.0.5.0</AssemblyVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
 </Project>

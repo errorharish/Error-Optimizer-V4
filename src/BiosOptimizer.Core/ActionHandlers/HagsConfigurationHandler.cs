@@ -36,7 +36,7 @@ public class HagsConfigurationHandler : IActionHandler
             };
         }
 
-        // Capture before state into Universal Backup Manager
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
         try
         {
             using var readKey = Registry.LocalMachine.OpenSubKey(TargetKey, false);
@@ -45,7 +45,7 @@ public class HagsConfigurationHandler : IActionHandler
                 ? (oldRaw.ToString() == "2" ? "Enabled (2)" : $"Disabled ({oldRaw})")
                 : "VALUE DID NOT EXIST";
 
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
+            var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
                 entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
                 $"HAGS (Hardware Accelerated GPU Scheduling) \u2192 {expectedStr}",
                 "HKLM",
@@ -56,8 +56,15 @@ public class HagsConfigurationHandler : IActionHandler
                 val,
                 "SAFE"
             );
+            if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+            {
+                return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = bkErr };
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = $"Pre-optimization backup failed: {ex.Message}" };
+        }
 
         try
         {

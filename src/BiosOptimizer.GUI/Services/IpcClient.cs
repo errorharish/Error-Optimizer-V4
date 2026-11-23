@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO.Pipes;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media;
 using BiosOptimizer.IPC.Contracts;
 
 namespace BiosOptimizer.GUI.Services
@@ -24,6 +26,9 @@ namespace BiosOptimizer.GUI.Services
         bool IsServiceAvailable { get; }
         IpcConnectionState ConnectionState { get; }
         string ServiceBuildId { get; }
+        bool IsOnline { get; }
+        string StatusText { get; }
+        Brush StatusBrush { get; }
         event Action<bool> ServiceAvailabilityChanged;
         event Action<IpcConnectionState> ConnectionStateChanged;
 
@@ -37,13 +42,15 @@ namespace BiosOptimizer.GUI.Services
 
     public class IpcClient : IIpcClient
     {
-        private string PipeName
+        private string[] GetCandidatePipeNames()
         {
-            get
+            var app = System.Windows.Application.Current as App;
+            var session = app?.BackendManager?.SessionId;
+            if (!string.IsNullOrEmpty(session) && session != "default")
             {
-                var app = System.Windows.Application.Current as App;
-                return $"BiosOptimizer_IPC_v2_{app?.BackendManager?.SessionId ?? "default"}";
+                return new[] { $"BiosOptimizer_IPC_v2_{session}", "BiosOptimizer_IPC_v2_default" };
             }
+            return new[] { "BiosOptimizer_IPC_v2_default" };
         }
 
         private const int DefaultRequestTimeoutMs = 10000;
@@ -103,6 +110,7 @@ namespace BiosOptimizer.GUI.Services
 
                 if (stateChanged)
                 {
+                    UiLogger.Log($"ConnectionState changed: {value} (ServiceAvailable={_serviceAvailable})");
                     ServiceAvailabilityChanged?.Invoke(_serviceAvailable);
                     ConnectionStateChanged?.Invoke(value);
                     if (value == IpcConnectionState.Connected)
@@ -122,6 +130,35 @@ namespace BiosOptimizer.GUI.Services
         public event Action<bool> ServiceAvailabilityChanged;
         public event Action<IpcConnectionState> ConnectionStateChanged;
 
+        private static readonly Brush _onlineBrush = CreateFrozenBrush(16, 185, 129); // #10B981
+        private static readonly Brush _warningBrush = CreateFrozenBrush(245, 158, 11); // #F59E0B
+        private static readonly Brush _offlineBrush = CreateFrozenBrush(239, 68, 68); // #EF4444
+
+        private static Brush CreateFrozenBrush(byte r, byte g, byte b)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            brush.Freeze();
+            return brush;
+        }
+
+        public bool IsOnline => ConnectionState == IpcConnectionState.Connected;
+
+        public string StatusText => ConnectionState switch
+        {
+            IpcConnectionState.Connected  => "Service online",
+            IpcConnectionState.Connecting => "Connecting to service...",
+            IpcConnectionState.Degraded   => "Service degraded",
+            _                             => "Service offline"
+        };
+
+        public Brush StatusBrush => ConnectionState switch
+        {
+            IpcConnectionState.Connected  => _onlineBrush,
+            IpcConnectionState.Connecting => _warningBrush,
+            IpcConnectionState.Degraded   => _warningBrush,
+            _                             => _offlineBrush
+        };
+
         // ──────────────────────────────────────────────────────────────
         // Health / readiness polling
         // ──────────────────────────────────────────────────────────────
@@ -133,6 +170,7 @@ namespace BiosOptimizer.GUI.Services
         /// </summary>
         public async Task<bool> WaitForReadyAsync(TimeSpan timeout, CancellationToken ct = default)
         {
+            UiLogger.Log($"WaitForReadyAsync started (timeout: {timeout.TotalSeconds}s).");
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(timeout);
 
@@ -146,33 +184,39 @@ namespace BiosOptimizer.GUI.Services
                         var hs = JsonSerializer.Deserialize<IpcHandshakeResponse>(res.Data);
                         var app = System.Windows.Application.Current as App;
                         var bm = app?.BackendManager;
-                        if (hs?.ProtocolVersion == "v2" && (bm == null || string.IsNullOrEmpty(bm.SessionId) || hs.SessionId == bm.SessionId))
+                        if (hs?.ProtocolVersion == "v2")
                         {
                             var attr = System.Reflection.Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
                             var guiBuildId = attr.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attr[0]).InformationalVersion : "Unknown";
                             
                             if (!AreBuildIdsCompatible(guiBuildId, hs.BuildId))
                             {
+                                UiLogger.Log($"[HANDSHAKE MISMATCH] GUI: {guiBuildId}, Service: {hs.BuildId}");
                                 SetConnectionState(IpcConnectionState.Offline);
-                                return false; // Handshake fails due to version mismatch
+                                return false;
                             }
                             
                             _serviceBuildId = hs.BuildId;
                             SetConnectionState(IpcConnectionState.Connected);
+                            UiLogger.Log($"WaitForReadyAsync handshake succeeded! ServiceBuildId: '{_serviceBuildId}'");
                             return true;
                         }
                     }
                 }
-                catch { /* pipe not ready yet */ }
+                catch (Exception ex)
+                {
+                    UiLogger.Log($"WaitForReadyAsync poll exception: {ex.Message}");
+                }
 
                 try { await Task.Delay(500, cts.Token); } catch { break; }
             }
 
+            UiLogger.Log("WaitForReadyAsync timed out without a valid handshake. Transitioning to Degraded.");
             SetConnectionState(IpcConnectionState.Degraded);
             return false;
         }
 
-        public static bool AreBuildIdsCompatible(string? guiBuild, string? serviceBuild)
+        public static bool AreBuildIdsCompatible(string guiBuild, string serviceBuild)
         {
             if (string.IsNullOrWhiteSpace(guiBuild) || string.IsNullOrWhiteSpace(serviceBuild)) return true;
             if (guiBuild.Equals("Unknown", StringComparison.OrdinalIgnoreCase) || serviceBuild.Equals("Unknown", StringComparison.OrdinalIgnoreCase)) return true;
@@ -191,91 +235,93 @@ namespace BiosOptimizer.GUI.Services
         {
             var request = new IpcMessage { Type = type, Payload = payload };
             int timeoutMs = GetRequestTimeoutMs(type);
+            var candidatePipes = GetCandidatePipeNames();
 
-            // First attempt — if it fails with a timeout or pipe error, retry once after 500ms
-            for (int attempt = 0; attempt < 2; attempt++)
+            // Try candidate pipes in order
+            foreach (var pipeName in candidatePipes)
             {
-                try
+                for (int attempt = 0; attempt < 2; attempt++)
                 {
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    cts.CancelAfter(timeoutMs);
-
-                    using var pipe = new NamedPipeClientStream(".", PipeName,
-                        PipeDirection.InOut, PipeOptions.Asynchronous);
-
-                    await pipe.ConnectAsync(ConnectTimeoutMs, cts.Token);
-
-                    // Append \n so the server's StreamReader.ReadLineAsync() gets a complete line
-                    var requestWithNewline = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request) + "\n");
-                    await pipe.WriteAsync(requestWithNewline, 0, requestWithNewline.Length, cts.Token);
-                    await pipe.FlushAsync(cts.Token);
-
-                    // Read one response line (final, non-streaming response)
-                    using var reader = new System.IO.StreamReader(pipe, System.Text.Encoding.UTF8, false, 65536, leaveOpen: false);
-                    var json = await reader.ReadLineAsync();
-                    if (string.IsNullOrEmpty(json))
-                        return Fail("Zero bytes read from service");
-
-                    var response = JsonSerializer.Deserialize<IpcResponse>(json);
-
-                    // Update service build ID and available flag on a successful GetVersion
-                    if (type == IpcMessageType.GetVersion && response?.Success == true && response.Data != null)
+                    try
                     {
-                        try
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        cts.CancelAfter(timeoutMs);
+
+                        using var pipe = new NamedPipeClientStream(".", pipeName,
+                            PipeDirection.InOut, PipeOptions.Asynchronous);
+
+                        await pipe.ConnectAsync(ConnectTimeoutMs, cts.Token);
+
+                        // Append \n so the server's StreamReader.ReadLineAsync() gets a complete line
+                        var requestWithNewline = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request) + "\n");
+                        await pipe.WriteAsync(requestWithNewline, 0, requestWithNewline.Length, cts.Token);
+                        await pipe.FlushAsync(cts.Token);
+
+                        // Read one response line
+                        using var reader = new System.IO.StreamReader(pipe, System.Text.Encoding.UTF8, false, 65536, leaveOpen: false);
+                        var json = await reader.ReadLineAsync();
+                        if (string.IsNullOrEmpty(json))
+                            return Fail("Zero bytes read from service");
+
+                        var response = JsonSerializer.Deserialize<IpcResponse>(json);
+
+                        // Update service build ID and available flag on a successful GetVersion
+                        if (type == IpcMessageType.GetVersion && response?.Success == true && response.Data != null)
                         {
-                            var hs = JsonSerializer.Deserialize<IpcHandshakeResponse>(response.Data);
-                            var app = System.Windows.Application.Current as App;
-                            var bm = app?.BackendManager;
-                            if (hs?.ProtocolVersion == "v2" && (bm == null || string.IsNullOrEmpty(bm.SessionId) || hs.SessionId == bm.SessionId))
+                            try
                             {
-                                var attr = System.Reflection.Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
-                                var guiBuildId = attr.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attr[0]).InformationalVersion : "Unknown";
-                                
-                                if (guiBuildId != "Unknown" && hs.BuildId != "Unknown" && !AreBuildIdsCompatible(guiBuildId, hs.BuildId))
+                                var hs = JsonSerializer.Deserialize<IpcHandshakeResponse>(response.Data);
+                                if (hs?.ProtocolVersion == "v2")
                                 {
-                                    SetConnectionState(IpcConnectionState.Offline);
-                                    return Fail($"SERVICE VERSION MISMATCH\nGUI: {guiBuildId}\nBackend: {hs.BuildId}");
+                                    var attr = System.Reflection.Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
+                                    var guiBuildId = attr.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attr[0]).InformationalVersion : "Unknown";
+                                    
+                                    if (guiBuildId != "Unknown" && hs.BuildId != "Unknown" && !AreBuildIdsCompatible(guiBuildId, hs.BuildId))
+                                    {
+                                        UiLogger.Log($"[VERSION MISMATCH] GUI: {guiBuildId}, Service: {hs.BuildId}");
+                                        SetConnectionState(IpcConnectionState.Offline);
+                                        return Fail($"SERVICE VERSION MISMATCH\nGUI: {guiBuildId}\nBackend: {hs.BuildId}");
+                                    }
+                                    
+                                    _serviceBuildId = hs.BuildId;
+                                    SetConnectionState(IpcConnectionState.Connected);
                                 }
-                                
-                                _serviceBuildId = hs.BuildId;
-                                SetConnectionState(IpcConnectionState.Connected);
+                                else
+                                {
+                                    UiLogger.Log($"[HANDSHAKE FAILED] Protocol: '{hs?.ProtocolVersion}'");
+                                    SetConnectionState(IpcConnectionState.Offline);
+                                    return Fail("Handshake validation failed. Protocol mismatch.");
+                                }
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                SetConnectionState(IpcConnectionState.Offline);
-                                return Fail("Handshake validation failed. Session mismatch.");
+                                UiLogger.LogError("Handshake deserialization exception", ex);
+                                SetConnectionState(IpcConnectionState.Degraded);
                             }
                         }
-                        catch { SetConnectionState(IpcConnectionState.Degraded); }
-                    }
-                    else if (response?.Success == true)
-                    {
-                        // Any successful response confirms the service is actively connected
-                        SetConnectionState(IpcConnectionState.Connected);
-                    }
+                        else if (response?.Success == true)
+                        {
+                            SetConnectionState(IpcConnectionState.Connected);
+                        }
 
-                    return response ?? Fail("Empty response from service");
-                }
-                catch (OperationCanceledException)
-                {
-                    if (attempt == 0 && !ct.IsCancellationRequested)
-                    {
-                        // Wait 500ms and retry once
-                        try { await Task.Delay(500, ct); } catch { break; }
-                        continue;
+                        return response ?? Fail("Empty response from service");
                     }
-                    return Fail("Service request timed out or cancelled");
-                }
-                catch (Exception ex)
-                {
-                    if (attempt == 0 && !ct.IsCancellationRequested)
+                    catch (OperationCanceledException)
                     {
-                        try { await Task.Delay(500, ct); } catch { break; }
-                        continue;
+                        if (attempt == 0 && !ct.IsCancellationRequested)
+                        {
+                            try { await Task.Delay(300, ct); } catch { break; }
+                            continue;
+                        }
                     }
-                    return Fail(ex.Message.Contains("pipe") || ex.Message.Contains("connect") || ex.Message.Contains("No connection")
-                        ? "Service Offline"
-                        : "IPC Error: " + ex.Message);
+                    catch (Exception ex)
+                    {
+                        if (attempt == 0 && !ct.IsCancellationRequested)
+                        {
+                            try { await Task.Delay(300, ct); } catch { break; }
+                            continue;
+                        }
+                    }
                 }
             }
 
@@ -291,23 +337,39 @@ namespace BiosOptimizer.GUI.Services
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             var request = new IpcMessage { Type = type, Payload = payload };
-            var requestBytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
+            var candidatePipes = GetCandidatePipeNames();
+            NamedPipeClientStream connectedPipe = null;
 
-            NamedPipeClientStream pipe = null;
+            foreach (var pipeName in candidatePipes)
+            {
+                try
+                {
+                    var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                    using var connectCts = new CancellationTokenSource(ConnectTimeoutMs);
+                    await pipe.ConnectAsync(connectCts.Token);
+                    var requestWithNewline = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request) + "\n");
+                    await pipe.WriteAsync(requestWithNewline, 0, requestWithNewline.Length, ct);
+                    await pipe.FlushAsync(ct);
+
+                    connectedPipe = pipe;
+                    IsServiceAvailable = true;
+                    break;
+                }
+                catch
+                {
+                    // Try next pipe candidate
+                }
+            }
+
+            if (connectedPipe == null)
+            {
+                yield break;
+            }
+
             try
             {
-                pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-                using var connectCts = new CancellationTokenSource(ConnectTimeoutMs);
-                await pipe.ConnectAsync(connectCts.Token);
-                IsServiceAvailable = true;
-
-                // Append \n terminator so the server's StreamReader.ReadLineAsync gets a complete line
-                var requestWithNewline = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request) + "\n");
-                await pipe.WriteAsync(requestWithNewline, 0, requestWithNewline.Length, ct);
-                await pipe.FlushAsync(ct);
-
-                using var reader = new System.IO.StreamReader(pipe, System.Text.Encoding.UTF8, false, 4096, leaveOpen: false);
-                while (!ct.IsCancellationRequested && pipe.IsConnected)
+                using var reader = new System.IO.StreamReader(connectedPipe, System.Text.Encoding.UTF8, false, 4096, leaveOpen: false);
+                while (!ct.IsCancellationRequested && connectedPipe.IsConnected)
                 {
                     var line = await reader.ReadLineAsync();
                     if (line == null) break;
@@ -320,7 +382,7 @@ namespace BiosOptimizer.GUI.Services
             }
             finally
             {
-                pipe?.Dispose();
+                connectedPipe.Dispose();
             }
         }
 

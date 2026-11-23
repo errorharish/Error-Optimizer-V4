@@ -10,16 +10,26 @@ public class LargeFileScannerEngine : ICleanerEngine
 
     public CleanupScanDto Scan()
     {
-        // For demonstration, scan a restricted path (like Downloads) looking for files > 1GB
-        // Do NOT auto-delete anything here. This returns a "scanned" summary.
+        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string driveRoot = Path.GetPathRoot(userProfile) ?? "C:\\";
+        var cleaner = new StorageCleanerEngine();
+        const long minSizeBytes = 100L * 1024 * 1024; // 100 MB threshold
+        var largeFiles = cleaner.FindLargeFiles(driveRoot, minSizeBytes, CancellationToken.None);
+
         var scan = new CleanupScanDto
         {
             Category = "Storage",
             IsSafeToClean = false, // Explicit user selection required for Large Files
-            ScannedPaths = new List<string> { Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) }
+            ScannedPaths = largeFiles.Select(f => f.FullPath).ToList(),
+            FileCount = largeFiles.Count,
+            TotalSizeInBytes = largeFiles.Sum(f => f.SizeBytes)
         };
 
-        // Real implementation would recurse safely
+        if (scan.ScannedPaths.Count == 0 && !string.IsNullOrWhiteSpace(userProfile))
+        {
+            scan.ScannedPaths.Add(userProfile);
+        }
+
         return scan;
     }
 

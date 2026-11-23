@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace BiosOptimizer.Core.Models;
 
@@ -21,6 +21,9 @@ public class ConditionDef
 
     [JsonPropertyName("value")]
     public object? Value { get; set; }
+
+    [JsonPropertyName("valueType")]
+    public string? ValueType { get; set; }
 }
 
 public class OptimizationEntry
@@ -45,6 +48,9 @@ public class OptimizationEntry
 
     [JsonPropertyName("value")]
     public object? Value { get; set; }
+
+    [JsonPropertyName("type")]
+    public string? ValueType { get; set; }
 
     [JsonPropertyName("os")]
     public List<string> Os { get; set; } = new();
@@ -93,4 +99,13 @@ public class ProfileDef
 
     [JsonPropertyName("entries")]
     public List<OptimizationEntry> Entries { get; set; } = new();
+
+    [JsonPropertyName("profileOrigin")]
+    public string ProfileOrigin { get; set; } = "DISK";
+
+    [JsonPropertyName("sourcePath")]
+    public string? SourcePath { get; set; }
+
+    [JsonPropertyName("isBuiltInFallback")]
+    public bool IsBuiltInFallback { get; set; } = false;
 }

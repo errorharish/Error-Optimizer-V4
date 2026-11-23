@@ -28,33 +28,38 @@ public class TcpAutoTuningHandler : IActionHandler
             };
         }
 
-        // Capture before state into Universal Backup Manager
-        try
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureNetworkTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            $"TCP Auto-Tuning Level \u2192 {targetValue}",
+            "TCP Global Settings",
+            currentValue,
+            targetValue,
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureNetworkTweak(
-                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
-                $"TCP Auto-Tuning Level \u2192 {targetValue}",
-                "TCP Global Settings",
-                currentValue,
-                targetValue,
-                "SAFE"
-            );
+            return new OptimizationResult
+            {
+                Status = ResultStatus.Failed,
+                ItemId = "TcpAutoTuning",
+                DisplayName = entry.DisplayName,
+                Message = bkErr
+            };
         }
-        catch { }
 
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "netsh",
                 Arguments = $"int tcp set global autotuninglevel={targetValue}",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             });
-            p?.WaitForExit();
-            
-            if (p?.ExitCode == 0)
+            if (p != null && p.WaitForExit(5000) && p.ExitCode == 0)
             {
                 var newValue = GetCurrentValueDisplay(entry);
                 if (newValue.Equals(targetValue, StringComparison.OrdinalIgnoreCase))
@@ -64,7 +69,7 @@ public class TcpAutoTuningHandler : IActionHandler
                         Status = ResultStatus.Success,
                         ItemId = "TcpAutoTuning",
                         DisplayName = $"Set TCP Auto-Tuning to {targetValue}",
-                        
+                        Message = $"Verified TCP Auto-Tuning = {newValue}"
                     };
                 }
             }
@@ -83,7 +88,7 @@ public class TcpAutoTuningHandler : IActionHandler
     {
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "netsh",
                 Arguments = "int tcp show global",
@@ -92,7 +97,7 @@ public class TcpAutoTuningHandler : IActionHandler
                 RedirectStandardOutput = true
             });
             var output = p?.StandardOutput.ReadToEnd();
-            p?.WaitForExit();
+            p?.WaitForExit(4000);
 
             if (!string.IsNullOrEmpty(output))
             {

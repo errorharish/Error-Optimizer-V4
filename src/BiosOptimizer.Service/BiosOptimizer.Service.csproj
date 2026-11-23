@@ -5,9 +5,18 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-BiosOptimizer.Service-a2097ee2-fca4-494e-82b4-852e7e15ae44</UserSecretsId>
-    <Version>2026.8.20.1206</Version>
-    <FileVersion>2026.8.20.1206</FileVersion>
-    <AssemblyVersion>2026.8.20.1206</AssemblyVersion>
+    <AssemblyTitle>ERROR OPTIMIZER V4 Service</AssemblyTitle>
+    <Product>ERROR OPTIMIZER V4</Product>
+    <Company>Error Optimizer Team</Company>
+    <Description>ERROR OPTIMIZER V4 Background Service</Description>
+    <Version>4.0.5</Version>
+    <FileVersion>4.0.5.0</FileVersion>
+    <AssemblyVersion>4.0.5.0</AssemblyVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +36,7 @@
   <ItemGroup>
     <Content Include="..\..\profiles\**\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>profiles\%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>

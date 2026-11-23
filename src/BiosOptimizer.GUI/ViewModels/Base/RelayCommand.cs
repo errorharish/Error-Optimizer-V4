@@ -20,12 +20,12 @@ namespace BiosOptimizer.GUI.ViewModels.Base
         {
             add 
             { 
-                CommandManager.RequerySuggested += value; 
+                try { CommandManager.RequerySuggested += value; } catch { }
                 _canExecuteChangedInternal += value;
             }
             remove 
             { 
-                CommandManager.RequerySuggested -= value; 
+                try { CommandManager.RequerySuggested -= value; } catch { }
                 _canExecuteChangedInternal -= value;
             }
         }
@@ -33,7 +33,7 @@ namespace BiosOptimizer.GUI.ViewModels.Base
         public void RaiseCanExecuteChanged()
         {
             _canExecuteChangedInternal?.Invoke(this, EventArgs.Empty);
-            CommandManager.InvalidateRequerySuggested();
+            try { CommandManager.InvalidateRequerySuggested(); } catch { }
         }
 
         public bool CanExecute(object parameter)

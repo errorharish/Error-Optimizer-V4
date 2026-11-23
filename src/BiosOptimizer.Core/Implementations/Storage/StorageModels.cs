@@ -7,14 +7,21 @@ namespace BiosOptimizer.Core.Implementations.Storage
     {
         public string Name { get; set; } = string.Empty; // e.g. "C:\"
         public string Letter => Name.TrimEnd('\\');
+        public string VolumeGuid { get; set; } = string.Empty;
         public string VolumeLabel { get; set; } = string.Empty;
         public string DriveFormat { get; set; } = string.Empty; // NTFS, ReFS, FAT32
         public string DriveType { get; set; } = string.Empty; // Fixed, Removable, Network
+        public bool IsFixedLocalDrive { get; set; }
+        public int? PhysicalDiskIndex { get; set; }
+        public string PhysicalDiskDeviceId { get; set; } = string.Empty;
+        public long PhysicalDiskTotalBytes { get; set; }
+        public double PhysicalDiskTotalGb => PhysicalDiskTotalBytes > 0 ? Math.Round(PhysicalDiskTotalBytes / (1024.0 * 1024 * 1024), 1) : 0;
         public string MediaType { get; set; } = "NVMe / SSD"; // SSD, HDD, NVMe, USB
         public string Model { get; set; } = "Solid State Drive";
         public string InterfaceType { get; set; } = "NVMe"; // NVMe, SATA, USB
         public long TotalBytes { get; set; }
         public long FreeBytes { get; set; }
+        public long AvailableFreeBytes { get; set; }
         public long UsedBytes => TotalBytes > FreeBytes ? TotalBytes - FreeBytes : 0;
         public double TotalGb => Math.Round(TotalBytes / (1024.0 * 1024 * 1024), 1);
         public double UsedGb => Math.Round(UsedBytes / (1024.0 * 1024 * 1024), 1);
@@ -27,6 +34,22 @@ namespace BiosOptimizer.Core.Implementations.Storage
         public string StoragePressure { get; set; } = "LOW"; // LOW (<70%), MODERATE (70-85%), HIGH (85-95%), CRITICAL (>95%)
         public bool IsSystemDrive { get; set; }
         public bool IsReady { get; set; }
+    }
+
+    public sealed class UnifiedStorageAggregate
+    {
+        public long UnifiedTotalBytes { get; init; }
+        public long UnifiedUsedBytes { get; init; }
+        public long UnifiedFreeBytes { get; init; }
+        public double UnifiedUsagePercent { get; init; }
+        public double UnifiedTotalGb => UnifiedTotalBytes > 0 ? Math.Round(UnifiedTotalBytes / (1024.0 * 1024 * 1024), 1) : 0;
+        public double UnifiedUsedGb => UnifiedUsedBytes > 0 ? Math.Round(UnifiedUsedBytes / (1024.0 * 1024 * 1024), 1) : 0;
+        public double UnifiedFreeGb => UnifiedFreeBytes > 0 ? Math.Round(UnifiedFreeBytes / (1024.0 * 1024 * 1024), 1) : 0;
+        public int VolumeCount { get; init; }
+        public string ScopeLabel { get; init; } = "No fixed volumes";
+        public string VolumeLettersSummary { get; init; } = string.Empty;
+        public double? PhysicalHealthPct { get; init; }
+        public string SmartStatusSummary { get; init; } = "UNKNOWN";
     }
 
     public enum CleanupApplicabilityState

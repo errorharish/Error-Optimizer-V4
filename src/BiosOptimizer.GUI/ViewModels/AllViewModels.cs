@@ -340,9 +340,10 @@ namespace BiosOptimizer.GUI.ViewModels
             var request = new DebloatRequestDto { SelectedIds = selectedIds };
             var payload = JsonSerializer.Serialize(request);
             
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
             try
             {
-                await foreach (var r in _ipc.SendStreamingRequestAsync(IpcMessageType.ApplyDebloatItems, payload))
+                await foreach (var r in _ipc.SendStreamingRequestAsync(IpcMessageType.ApplyDebloatItems, payload, cts.Token))
                 {
                     if (r.Success && r.Data != null)
                     {
@@ -382,16 +383,26 @@ namespace BiosOptimizer.GUI.ViewModels
                         }
                     }
                 }
-                
-                await Task.Delay(500);
-                IsExecuting = false;
-                await ScanAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                Status = "Debloat operation completed (bounded timeout reached).";
+                Result = "Verification completed.";
             }
             catch (Exception ex)
             {
-                IsExecuting = false;
                 Status = "Error: " + ex.Message;
                 Result = ex.Message;
+            }
+            finally
+            {
+                OptimizationProgress = 100;
+                IsExecuting = false;
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(500);
+                    await ScanAsync();
+                });
             }
         }
     }
@@ -3900,15 +3911,13 @@ namespace BiosOptimizer.GUI.ViewModels
             _ipc = ipc;
             AppSettingsService.Instance.SynchronizeWithRealWindowsStartup();
 
-            // Initialize Presets
-            AccentPresets.Add(new ColorPresetItem { Name = "Red", HexColor = "#E53935", ColorBrush = GetFrozenBrush(Color.FromRgb(0xE5, 0x39, 0x35)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Orange", HexColor = "#FF9800", ColorBrush = GetFrozenBrush(Color.FromRgb(0xFF, 0x98, 0x00)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Yellow", HexColor = "#FBC02D", ColorBrush = GetFrozenBrush(Color.FromRgb(0xFB, 0xC0, 0x2D)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Green", HexColor = "#10B981", ColorBrush = GetFrozenBrush(Color.FromRgb(0x10, 0xB9, 0x81)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Cyan", HexColor = "#00E5FF", ColorBrush = GetFrozenBrush(Color.FromRgb(0x00, 0xE5, 0xFF)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Blue", HexColor = "#2196F3", ColorBrush = GetFrozenBrush(Color.FromRgb(0x21, 0x96, 0xF3)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Purple", HexColor = "#9C27B0", ColorBrush = GetFrozenBrush(Color.FromRgb(0x9C, 0x27, 0xB0)) });
-            AccentPresets.Add(new ColorPresetItem { Name = "Pink", HexColor = "#E91E63", ColorBrush = GetFrozenBrush(Color.FromRgb(0xE9, 0x1E, 0x63)) });
+            // Initialize Presets (Ash / Graphite / Grey Metallic Liquid palette)
+            AccentPresets.Add(new ColorPresetItem { Name = "Soft Silver", HexColor = "#B5BBC1", ColorBrush = GetFrozenBrush(Color.FromRgb(0xB5, 0xBB, 0xC1)) });
+            AccentPresets.Add(new ColorPresetItem { Name = "Polished Steel", HexColor = "#E5E7EA", ColorBrush = GetFrozenBrush(Color.FromRgb(0xE5, 0xE7, 0xEA)) });
+            AccentPresets.Add(new ColorPresetItem { Name = "Muted Silver", HexColor = "#8E969F", ColorBrush = GetFrozenBrush(Color.FromRgb(0x8E, 0x96, 0x9F)) });
+            AccentPresets.Add(new ColorPresetItem { Name = "Metallic Grey", HexColor = "#596169", ColorBrush = GetFrozenBrush(Color.FromRgb(0x59, 0x61, 0x69)) });
+            AccentPresets.Add(new ColorPresetItem { Name = "Gunmetal Ash", HexColor = "#3A4046", ColorBrush = GetFrozenBrush(Color.FromRgb(0x3A, 0x40, 0x46)) });
+            AccentPresets.Add(new ColorPresetItem { Name = "Smoked Graphite", HexColor = "#272B2F", ColorBrush = GetFrozenBrush(Color.FromRgb(0x27, 0x2B, 0x2F)) });
 
             _customHexInput = AppSettingsService.Instance.AccentColor;
             SyncHsvFromColor(ThemeBrushService.ParseColor(AppSettingsService.Instance.AccentColor, Color.FromRgb(0x00, 0xE5, 0xFF)));

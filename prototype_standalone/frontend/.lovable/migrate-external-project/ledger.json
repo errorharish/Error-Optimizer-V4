@@ -1,0 +1,54 @@
+{
+  "source": "code-archive (hello-there-195cd7b1-main.zip, ERROR OPTIMIZER V3 Classic + V4 Professional)",
+  "capabilities": [
+    {
+      "capability": "code",
+      "source": "TanStack Start + React 19 frontend (src/components/eo, src/lib/eo, routes /, /$page, /blueprint)",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": ""
+    },
+    {
+      "capability": "schema",
+      "source": "none detected",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": ""
+    },
+    {
+      "capability": "records",
+      "source": "none; app state persists in browser storage",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": ""
+    },
+    {
+      "capability": "auth",
+      "source": "none detected",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": ""
+    },
+    {
+      "capability": "native Windows backend",
+      "source": "src/lib/eo/nativeBridge.ts, serviceHealthBackend.ts (optional VITE_EO_SERVICE_HEALTH_URL)",
+      "outcome": "preserve",
+      "status": "external",
+      "next_action": "Native Windows helper is not part of the archive; contracts preserved unchanged"
+    },
+    {
+      "capability": "secrets",
+      "source": "none required",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": ""
+    },
+    {
+      "capability": "verification",
+      "source": "typecheck, vitest suite, route render",
+      "outcome": "verify",
+      "status": "verified",
+      "next_action": "Typecheck clean; 304/309 tests pass. 5 failures already present in the uploaded source (blueprint-sync motion token, execution-plan, input-modes x2, moded-selection) await owner decision"
+    }
+  ]
+}

@@ -481,6 +481,7 @@ public class ProcessReductionViewModel : ViewModelBase
 
                 // Immediate rescan to update live Windows state
                 await ScanAsync();
+                OptimizationStateCoordinator.NotifyOptimizationStateChanged();
             }
             else
             {

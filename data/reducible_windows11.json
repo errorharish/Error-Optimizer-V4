@@ -1,0 +1,59 @@
+{
+  "os": "Windows 11",
+  "reducibleProcesses": [
+    {
+      "name": "Widgets.exe",
+      "category": "Widgets",
+      "reason": "Windows 11 desktop feed and widgets background process",
+      "tier": 1
+    },
+    {
+      "name": "WidgetService.exe",
+      "category": "Widgets",
+      "reason": "Windows 11 background widget content fetching service",
+      "tier": 1
+    },
+    {
+      "name": "WidgetsPlatformRuntime.exe",
+      "category": "Widgets",
+      "reason": "Windows 11 widget platform runtime broker",
+      "tier": 1
+    },
+    {
+      "name": "WebExperience.exe",
+      "category": "Widgets",
+      "reason": "Windows Web Experience Pack background helper",
+      "tier": 1
+    },
+    {
+      "name": "PhoneExperienceHost.exe",
+      "category": "Phone Link",
+      "reason": "Windows 11 Phone Link background host",
+      "tier": 1
+    },
+    {
+      "name": "GameBar.exe",
+      "category": "Xbox",
+      "reason": "Xbox Game Bar background telemetry",
+      "tier": 1
+    },
+    {
+      "name": "GameBarFTServer.exe",
+      "category": "Xbox",
+      "reason": "Xbox Game Bar file transfer server",
+      "tier": 1
+    },
+    {
+      "name": "CrossDeviceResume.exe",
+      "category": "Cross Device",
+      "reason": "Windows 11 cross device resume background host",
+      "tier": 2
+    },
+    {
+      "name": "FeedbackHub.exe",
+      "category": "Telemetry",
+      "reason": "Windows Feedback Hub idle background client",
+      "tier": 2
+    }
+  ]
+}

@@ -123,32 +123,71 @@ public class EnvironmentDetector : IEnvironmentDetector
                 break;
             }
 
-            using var gpuSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
-            bool isFirstGpu = true;
-            foreach (var obj in gpuSearcher.Get())
+            var dxgiGpus = BiosOptimizer.Core.Implementations.DxgiGpuReader.EnumerateAdapters();
+            if (dxgiGpus.Count > 0)
             {
-                var name = obj["Name"]?.ToString() ?? "";
-                var vendor = obj["AdapterCompatibility"]?.ToString() ?? "";
-                var driver = obj["DriverVersion"]?.ToString() ?? "";
-                long.TryParse(obj["AdapterRAM"]?.ToString(), out var vram);
-                
-                context.Gpus.Add(new GpuInfo
+                bool first = true;
+                var preferred = dxgiGpus.Find(g => g.IsDedicatedGpu) ?? dxgiGpus[0];
+                foreach (var g in dxgiGpus)
                 {
-                    Name = name,
-                    Vendor = vendor,
-                    VramBytes = vram,
-                    DriverVersion = driver,
-                    IsPrimary = isFirstGpu
-                });
-                
-                // For backward compatibility with existing bindings
-                if (isFirstGpu || (!name.Contains("Intel") && name.Contains("NVIDIA"))) 
+                    string vendor = g.VendorId switch
+                    {
+                        0x10DE => "NVIDIA",
+                        0x1002 => "AMD",
+                        0x8086 => "Intel",
+                        _ => "Unknown"
+                    };
+                    context.Gpus.Add(new GpuInfo
+                    {
+                        Name = g.Description,
+                        Vendor = vendor,
+                        VramBytes = (long)g.DedicatedVideoMemoryBytes,
+                        IsPrimary = ReferenceEquals(g, preferred) || (first && dxgiGpus.Count == 1)
+                    });
+                    first = false;
+                }
+                context.GpuName = preferred.Description;
+                context.GpuVendor = preferred.VendorId switch
                 {
-                    context.GpuName = name;
-                    context.GpuVendor = vendor;
-                    context.GpuDriverVersion = driver;
-                    context.VramBytes = vram;
-                    if (!name.Contains("Intel")) isFirstGpu = false; // prefer discrete
+                    0x10DE => "NVIDIA",
+                    0x1002 => "AMD",
+                    0x8086 => "Intel",
+                    _ => "Unknown"
+                };
+                context.VramBytes = (long)preferred.DedicatedVideoMemoryBytes;
+            }
+            else
+            {
+                using var gpuSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+                bool isFirstGpu = true;
+                foreach (var obj in gpuSearcher.Get())
+                {
+                    var name = obj["Name"]?.ToString() ?? "";
+                    if (name.Contains("Basic Render", StringComparison.OrdinalIgnoreCase) || name.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var vendor = obj["AdapterCompatibility"]?.ToString() ?? "";
+                    var driver = obj["DriverVersion"]?.ToString() ?? "";
+                    long.TryParse(obj["AdapterRAM"]?.ToString(), out var vram);
+
+                    context.Gpus.Add(new GpuInfo
+                    {
+                        Name = name,
+                        Vendor = vendor,
+                        VramBytes = vram,
+                        DriverVersion = driver,
+                        IsPrimary = isFirstGpu
+                    });
+
+                    bool discreteLike = !name.Contains("Intel", StringComparison.OrdinalIgnoreCase) || name.Contains("Arc", StringComparison.OrdinalIgnoreCase);
+                    if (isFirstGpu || discreteLike)
+                    {
+                        context.GpuName = name;
+                        context.GpuVendor = vendor;
+                        context.GpuDriverVersion = driver;
+                        context.VramBytes = vram;
+                        if (discreteLike) isFirstGpu = false;
+                    }
                 }
             }
             
@@ -300,6 +339,35 @@ public class EnvironmentDetector : IEnvironmentDetector
                 {
                     context.HardwareProfile.HagsSupported = true;
                     context.HardwareProfile.HagsEnabled = hws.ToString() == "2";
+                }
+            }
+
+            if (!context.HardwareProfile.HagsSupported && int.TryParse(context.WindowsBuild, out int buildNum) && buildNum >= 19041)
+            {
+                string gpuUpper = (context.GpuName ?? "").ToUpperInvariant();
+                bool isNvidiaHags = gpuUpper.Contains("NVIDIA") && (
+                    gpuUpper.Contains("GTX 10") || gpuUpper.Contains("1050") || gpuUpper.Contains("1060") ||
+                    gpuUpper.Contains("1070") || gpuUpper.Contains("1080") || gpuUpper.Contains("GT 1030") ||
+                    gpuUpper.Contains("TITAN X") || gpuUpper.Contains("TITAN XP") || gpuUpper.Contains("QUADRO P") ||
+                    gpuUpper.Contains("TESLA P") || gpuUpper.Contains("MX150") || gpuUpper.Contains("MX250") ||
+                    gpuUpper.Contains("MX350") || gpuUpper.Contains("RTX") || gpuUpper.Contains("GTX 16") ||
+                    gpuUpper.Contains("TITAN RTX") || gpuUpper.Contains("QUADRO RTX") || gpuUpper.Contains("RTX A") ||
+                    gpuUpper.Contains("A100") || gpuUpper.Contains("A10") || gpuUpper.Contains("A40") ||
+                    gpuUpper.Contains("A6000") || gpuUpper.Contains("H100") || gpuUpper.Contains("B100"));
+
+                bool isAmdHags = (gpuUpper.Contains("AMD") || gpuUpper.Contains("RADEON")) && (
+                    gpuUpper.Contains("RX 5300") || gpuUpper.Contains("RX 5500") || gpuUpper.Contains("RX 5600") ||
+                    gpuUpper.Contains("RX 5700") || gpuUpper.Contains("RX 6") || gpuUpper.Contains("RX 7") ||
+                    gpuUpper.Contains("RX 8") || gpuUpper.Contains("680M") || gpuUpper.Contains("780M") ||
+                    gpuUpper.Contains("880M") || gpuUpper.Contains("PRO W5") || gpuUpper.Contains("PRO W6") ||
+                    gpuUpper.Contains("PRO W7"));
+
+                bool isIntelHags = gpuUpper.Contains("INTEL") && (gpuUpper.Contains("ARC") || gpuUpper.Contains("XE-LPG") || gpuUpper.Contains("CORE ULTRA"));
+
+                if (isNvidiaHags || isAmdHags || isIntelHags)
+                {
+                    context.HardwareProfile.HagsSupported = true;
+                    context.HardwareProfile.HagsEnabled = false;
                 }
             }
         }

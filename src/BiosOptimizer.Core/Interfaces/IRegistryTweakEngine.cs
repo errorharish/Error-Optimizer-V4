@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace BiosOptimizer.Core.Interfaces
@@ -95,6 +95,7 @@ namespace BiosOptimizer.Core.Interfaces
         Task<RegistryTweakResponse> PlanRegistryTweakAsync();
         Task<RegistryTweakResponse> ReconcileStartupAsync();
         Task<(bool Success, string Message, string Status, int AppliedCount, int VerifiedCount, int RestartRequiredCount, int FailedCount)> ApplyRegistryTweaksAsync(List<string> tweakIds);
+        Task<BiosOptimizer.Core.Implementations.RegistryTweakExecutionResponse> ExecuteRegistryTweaksAsync(List<string> tweakIds);
         Task<(bool Success, string Message, string Status, int RestoredCount, int FailedCount)> RestoreRegistryTweaksAsync(List<string> tweakIds);
     }
 }

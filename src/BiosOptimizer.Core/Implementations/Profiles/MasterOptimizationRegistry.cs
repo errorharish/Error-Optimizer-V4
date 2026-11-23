@@ -373,40 +373,7 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                 }
             });
 
-            // 7. RAM Trim
-            Register(new CanonicalOptimizationDefinition
-            {
-                OptimizationId = "RAM.SAFE_BACKGROUND_TRIM",
-                Name = "AI Memory Optimization & Background Working-Set Trim",
-                Description = "Reclaims inactive memory pages from non-essential background processes while strictly protecting the foreground workload.",
-                Category = "RAM",
-                RiskLevel = "Low",
-                Priority = 88,
-                MinimumAggressiveness = 1,
-                RequiresAdmin = false,
-                RequiresReboot = false,
-                Reversible = true,
-                ApplicabilityDetector = (hw, wl) =>
-                {
-                    var ram = RamLimiterEngine.Instance;
-                    ram.ScanAndEnforce();
-                    if (ram.PressureLevel >= MemoryPressureLevel.Elevated || ram.SystemRamUsagePercent >= 70.0)
-                        return (ApplicabilityState.Applicable, $"Elevated memory pressure ({ram.SystemRamUsagePercent:F0}% used)");
-                    return (ApplicabilityState.AlreadyOptimal, $"Memory pressure is normal ({ram.SystemRamUsagePercent:F0}% used)");
-                },
-                CurrentStateReader = () => $"{RamLimiterEngine.Instance.SystemRamUsagePercent:F0}% Used ({RamLimiterEngine.Instance.PressureLevelText})",
-                TargetStateReader = () => "Optimized Working Sets",
-                ApplyHandler = () =>
-                {
-                    double before = RamLimiterEngine.Instance.SystemUsedRamMb;
-                    RamLimiterEngine.Instance.ScanAndEnforce();
-                    return before;
-                },
-                VerificationHandler = () => true,
-                RollbackHandler = null
-            });
-
-            // 8. CPU Priority
+            // 7. CPU Priority
             Register(new CanonicalOptimizationDefinition
             {
                 OptimizationId = "CPU.FOREGROUND_BOOST",
@@ -490,7 +457,6 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                     using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", writable: true);
                     object? prev = key?.GetValue("NetworkThrottlingIndex");
                     key?.SetValue("NetworkThrottlingIndex", unchecked((int)0xFFFFFFFF), RegistryValueKind.DWord);
-                    key?.SetValue("SystemResponsiveness", 0, RegistryValueKind.DWord);
                     return prev;
                 },
                 VerificationHandler = () =>
@@ -593,7 +559,15 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                     {
                         foreach (var f in Directory.GetFiles(temp))
                         {
-                            try { File.Delete(f); deleted++; } catch { }
+                            try
+                            {
+                                if (BiosOptimizer.Core.Implementations.Cleaners.SecureStoragePathValidator.ValidateForDeletion(f, out string canonical, out _))
+                                {
+                                    File.Delete(canonical);
+                                    deleted++;
+                                }
+                            }
+                            catch { }
                         }
                     }
                     return deleted;

@@ -53,9 +53,9 @@ public static class StateNormalizer
             (tgt.Equals("Not Installed", StringComparison.OrdinalIgnoreCase) || tgt.Equals("Removed", StringComparison.OrdinalIgnoreCase) || tgt.Equals("0", StringComparison.OrdinalIgnoreCase) || tgt.Equals("Disabled", StringComparison.OrdinalIgnoreCase)))
             return true;
 
-        // 9. Startup entry: Not Found / Unknown / Disabled == target Disabled / 0
-        if ((cur.Equals("Unknown", StringComparison.OrdinalIgnoreCase) || cur.Equals("Not Found", StringComparison.OrdinalIgnoreCase) || cur.Equals("Not Set", StringComparison.OrdinalIgnoreCase)) &&
-            (tgt.Equals("Disabled", StringComparison.OrdinalIgnoreCase) || tgt.Equals("0", StringComparison.OrdinalIgnoreCase)))
+        // 9. Startup entry / Scheduled Task: Not Found / Unknown == target Disabled
+        if ((cur.Equals("Unknown", StringComparison.OrdinalIgnoreCase) || cur.Equals("Not Found", StringComparison.OrdinalIgnoreCase)) &&
+            tgt.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
             return true;
 
         // 10. NTFS-style bit-flag registry values (NtfsDisableLastAccessUpdate bit 0)
@@ -63,6 +63,11 @@ public static class StateNormalizer
             return true;
 
         if (tgt.Equals("0", StringComparison.OrdinalIgnoreCase) && long.TryParse(cur, out long curLong2) && (curLong2 & 1) == 0 && curLong2 != 0)
+            return true;
+
+        // 11. Process priority: Not Running is satisfied when target priority is Idle/BelowNormal
+        if (cur.Equals("Not Running", StringComparison.OrdinalIgnoreCase) &&
+            (tgt.Equals("Idle", StringComparison.OrdinalIgnoreCase) || tgt.Equals("BelowNormal", StringComparison.OrdinalIgnoreCase) || tgt.Equals("Disabled", StringComparison.OrdinalIgnoreCase)))
             return true;
 
         return false;

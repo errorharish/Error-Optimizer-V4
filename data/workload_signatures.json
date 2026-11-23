@@ -1,0 +1,127 @@
+{
+  "Game": {
+    "processKeywords": [
+      "steam",
+      "epicgames",
+      "battle.net",
+      "riotclient",
+      "gog",
+      "upc",
+      "gamingservices"
+    ],
+    "requiresGpuOrWindow": true
+  },
+  "VideoEditing": {
+    "processKeywords": [
+      "premiere",
+      "resolve",
+      "vegas",
+      "filmora",
+      "capcut",
+      "avid",
+      "hitfilm",
+      "afterfx"
+    ]
+  },
+  "AudioEditing": {
+    "processKeywords": [
+      "audacity",
+      "reaper",
+      "ableton",
+      "fl64",
+      "fl",
+      "cubase",
+      "nuendo",
+      "protools",
+      "studioapp",
+      "bitwig",
+      "reason"
+    ]
+  },
+  "ThreeDEditing": {
+    "processKeywords": [
+      "blender",
+      "maya",
+      "3dsmax",
+      "cinema4d",
+      "houdini",
+      "zbrush",
+      "modo",
+      "sketchup",
+      "unrealeditor",
+      "unity"
+    ]
+  },
+  "Rendering": {
+    "processKeywords": [
+      "render",
+      "arnold",
+      "vray",
+      "redshift",
+      "corona",
+      "cycles",
+      "octane"
+    ]
+  },
+  "Encoding": {
+    "processKeywords": [
+      "handbrake",
+      "ffmpeg",
+      "x264",
+      "x265",
+      "amecommand",
+      "staxrip",
+      "shanaencoder"
+    ]
+  },
+  "Streaming": {
+    "processKeywords": [
+      "obs64",
+      "obs32",
+      "obs-browser-page",
+      "streamlabs",
+      "xsplit",
+      "twitchstudio",
+      "restream",
+      "meld",
+      "nvbroadcast",
+      "nvidia share",
+      "relive",
+      "discord"
+    ]
+  },
+  "Emulator": {
+    "processKeywords": [
+      "hd-player",
+      "bstksvc",
+      "blestacksservices",
+      "dnplayer",
+      "nox",
+      "memu",
+      "gameloop",
+      "mumu",
+      "genymotion"
+    ]
+  },
+  "VirtualMachine": {
+    "processKeywords": [
+      "vmware-vmx",
+      "vboxheadless",
+      "virtualbox",
+      "vmwp",
+      "parallels",
+      "qemu"
+    ]
+  },
+  "Benchmark": {
+    "processKeywords": [
+      "3dmark",
+      "cinebench",
+      "geekbench",
+      "passmark",
+      "unigine",
+      "furmark",
+      "occt"
+    ]
+  }
+}

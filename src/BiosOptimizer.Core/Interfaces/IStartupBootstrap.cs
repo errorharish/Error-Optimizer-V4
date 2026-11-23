@@ -23,7 +23,7 @@ namespace BiosOptimizer.Core.Interfaces
         public string ExePath { get; set; } = string.Empty;
         public string Arguments { get; set; } = string.Empty;
         public string SourceKey { get; set; } = @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-        public string EntryName { get; set; } = "Error Optimizer";
+        public string EntryName { get; set; } = "ERROR OPTIMIZER V4";
         public string DisplayStatus => Status switch
         {
             WindowsStartupRegistrationStatus.VerifiedEnabled => "VERIFIED (Enabled)",

@@ -35,26 +35,29 @@ public class VisualFxHandler : IActionHandler
             };
         }
 
-        // Capture before state into Universal Backup Manager
-        try
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            $"Visual FX Setting \u2192 {val}",
+            "HKCU",
+            TargetKey,
+            ValueName,
+            currentValueStr == "Unknown" ? "VALUE DID NOT EXIST" : currentValueStr,
+            "DWord",
+            val,
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
-                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
-                $"Visual FX Setting \u2192 {val}",
-                "HKCU",
-                TargetKey,
-                ValueName,
-                currentValueStr == "Unknown" ? "VALUE DID NOT EXIST" : currentValueStr,
-                "DWord",
-                val,
-                "SAFE"
-            );
+            return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = bkErr };
         }
-        catch { }
 
         try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(TargetKey);
+            var (k, _, _, _) = BiosOptimizer.Core.Implementations.RegistryTweakEngine.IsRunningAsSystem()
+                ? BiosOptimizer.Core.Implementations.RegistryTweakEngine.OpenTargetKeyWithPreflight("HKCU", TargetKey, writable: true)
+                : (null, Microsoft.Win32.RegistryView.Registry64, "", "");
+            using var key = k ?? Registry.CurrentUser.CreateSubKey(TargetKey);
             if (key != null)
             {
                 key.SetValue(ValueName, val, RegistryValueKind.DWord);
@@ -83,7 +86,10 @@ public class VisualFxHandler : IActionHandler
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(TargetKey);
+            var (k, _, _, _) = BiosOptimizer.Core.Implementations.RegistryTweakEngine.IsRunningAsSystem()
+                ? BiosOptimizer.Core.Implementations.RegistryTweakEngine.OpenTargetKeyWithPreflight("HKCU", TargetKey, writable: false)
+                : (null, Microsoft.Win32.RegistryView.Registry64, "", "");
+            using var key = k ?? Registry.CurrentUser.OpenSubKey(TargetKey);
             if (key != null)
             {
                 var val = key.GetValue(ValueName);

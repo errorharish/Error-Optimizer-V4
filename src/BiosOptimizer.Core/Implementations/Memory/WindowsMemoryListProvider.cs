@@ -137,6 +137,27 @@ namespace BiosOptimizer.Core.Implementations.Memory
         [DllImport("psapi.dll")]
         private static extern int EmptyWorkingSet(IntPtr hwProc);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        private static int GetForegroundProcessId()
+        {
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+                if (hwnd != IntPtr.Zero)
+                {
+                    GetWindowThreadProcessId(hwnd, out uint pid);
+                    return (int)pid;
+                }
+            }
+            catch { }
+            return -1;
+        }
+
         #endregion
 
         private readonly bool _isWindows;
@@ -268,23 +289,26 @@ namespace BiosOptimizer.Core.Implementations.Memory
                 }
                 catch { }
 
+                snapshot.IsNativeKernelQueried = queriedNative;
                 if (!queriedNative)
                 {
-                    // Fallback calculation from available memory
-                    long fallbackStandby = (long)(snapshot.AvailableBytes * 0.65);
-                    snapshot.StandbyCacheBytes = fallbackStandby;
-                    snapshot.LowPriorityStandbyBytes = (long)(fallbackStandby * 0.40);
-                    snapshot.ModifiedBytes = (long)(fallbackStandby * 0.08);
-                    snapshot.FreeBytes = (long)(snapshot.AvailableBytes * 0.35);
+                    snapshot.StandbyCacheBytes = -1;
+                    snapshot.LowPriorityStandbyBytes = -1;
+                    snapshot.ModifiedBytes = -1;
+                    snapshot.FreeBytes = -1;
                 }
 
-                // 2. Estimate working sets of non-system processes
-                snapshot.WorkingSetBytes = Process.GetProcesses()
-                    .Where(p => !IsCriticalProcess(p))
-                    .Sum(p =>
+                // 2. Measure working sets of non-system processes (disposing every Process handle cleanly)
+                long wsSum = 0;
+                foreach (var proc in Process.GetProcesses())
+                {
+                    using (proc)
                     {
-                        try { return p.WorkingSet64; } catch { return 0L; }
-                    });
+                        if (IsCriticalProcess(proc)) continue;
+                        try { wsSum += proc.WorkingSet64; } catch { }
+                    }
+                }
+                snapshot.WorkingSetBytes = wsSum;
             }
             catch { }
 
@@ -491,7 +515,9 @@ namespace BiosOptimizer.Core.Implementations.Memory
                     {
                         result.Succeeded = false;
                         result.ErrorDetails = $"NTSTATUS: 0x{status:X8}";
-                        result.SummaryMessage = $"Native standby purge returned code 0x{status:X8}.";
+                        result.SummaryMessage = status == unchecked((int)0xC0000061)
+                            ? "Administrator privilege (SeProfileSingleProcessPrivilege) is required to purge Windows Standby List."
+                            : $"Native standby purge returned NTSTATUS 0x{status:X8}.";
                         LogStandbyStage("FINAL_STATE", $"Result=FAILED (0x{status:X8}), Elapsed={sw.ElapsedMilliseconds}ms");
                     }
                 }
@@ -613,6 +639,16 @@ namespace BiosOptimizer.Core.Implementations.Memory
             }
             catch { }
 
+            try
+            {
+                int fgPid = GetForegroundProcessId();
+                if (fgPid > 0)
+                {
+                    protectedPids.Add(fgPid);
+                }
+            }
+            catch { }
+
             var processes = Process.GetProcesses();
             foreach (var proc in processes)
             {
@@ -643,7 +679,9 @@ namespace BiosOptimizer.Core.Implementations.Memory
                 return name switch
                 {
                     "system" or "idle" or "csrss" or "smss" or "lsass" or "services" or
-                    "wininit" or "winlogon" or "explorer" or "dwm" or "svchost" or "fontdrvhost" => true,
+                    "wininit" or "winlogon" or "explorer" or "dwm" or "svchost" or "fontdrvhost" or
+                    "audiodg" or "nvcontainer" or "nvsphelper64" or "nvdisplay.container" or
+                    "amdrsserv" or "radeonsoftware" or "igfxcuiservice" => true,
                     _ => false
                 };
             }

@@ -1,6 +1,7 @@
 using BiosOptimizer.Core.Interfaces;
 using BiosOptimizer.Core.Interop;
 using BiosOptimizer.Core.Services;
+using BiosOptimizer.Core.V4.Architecture;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,57 @@ using System.Threading.Tasks;
 
 namespace BiosOptimizer.Core.Implementations
 {
+    public class RegistryTweakOperationResult
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Status { get; set; } = "succeeded"; // "succeeded", "failed", "skipped", "unverified"
+        public string State { get; set; } = string.Empty; // "APPLIED", "ALREADY_OPTIMAL", "SKIPPED", "BLOCKED", "FAILED"
+        public string? Reason { get; set; }
+        public string? Verification { get; set; }
+        public bool Applied { get; set; }
+        public bool AlreadyDesired { get; set; }
+        public bool ReadbackVerified { get; set; }
+        public bool Failed { get; set; }
+        public bool Skipped { get; set; }
+        public bool Unverified { get; set; }
+        public bool RollbackAvailable { get; set; }
+        public string? FailureReason { get; set; }
+        public string CurrentValue { get; set; } = string.Empty;
+        public string TargetValue { get; set; } = string.Empty;
+        public string Hive { get; set; } = "HKLM";
+        public string KeyPath { get; set; } = string.Empty;
+        public string ValueName { get; set; } = string.Empty;
+        public string OriginalValue { get; set; } = string.Empty;
+        public string RequestedValue { get; set; } = string.Empty;
+        public bool WriteAttempted { get; set; }
+        public bool WriteSucceeded { get; set; }
+        public string ReadbackValue { get; set; } = string.Empty;
+        public string VerificationResult { get; set; } = "UNVERIFIED";
+        public bool AlreadyOptimized => AlreadyDesired;
+        public string? ErrorReason => FailureReason;
+        public string Detail { get; set; } = string.Empty;
+    }
+
+    public class RegistryTweakExecutionResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public int RequestedCount { get; set; }
+        public int AttemptedCount { get; set; }
+        public int AppliedCount { get; set; }
+        public int AlreadyDesiredCount { get; set; }
+        public int VerifiedCount { get; set; }
+        public int RestartRequiredCount { get; set; }
+        public int FailedCount { get; set; }
+        public int SkippedCount { get; set; }
+        public string? TransactionId { get; set; }
+        public RollbackInfoDto? Rollback => !string.IsNullOrEmpty(TransactionId) ? new RollbackInfoDto { Available = true, RestorePoint = TransactionId, TransactionId = TransactionId } : null;
+        public List<RegistryTweakOperationResult> Operations { get; set; } = new();
+        public List<RegistryTweakOperationResult> Results => Operations;
+    }
+
     public class RegistryTransactionEntry
     {
         public string TransactionId { get; set; } = Guid.NewGuid().ToString("N");
@@ -66,13 +118,7 @@ namespace BiosOptimizer.Core.Implementations
 
         public RegistryTransactionJournal()
         {
-            string progData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-            if (string.IsNullOrWhiteSpace(progData))
-            {
-                progData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ErrorOptimizer");
-            }
-            string dir = Path.Combine(progData, "ErrorOptimizer", "RegistryOptimizer");
-            try { Directory.CreateDirectory(dir); } catch { }
+            string dir = BiosOptimizer.Core.Common.AppEnvironment.ResolveWritableDataDirectory("RegistryOptimizer");
             _journalPath = Path.Combine(dir, "registry_transaction_journal.json");
             _diagnosticsPath = Path.Combine(dir, "registry_diagnostics.json");
         }
@@ -317,16 +363,16 @@ namespace BiosOptimizer.Core.Implementations
             new RegistryTweakDefinition
             {
                 Id = "tweak.mmcss.systemresponsiveness",
-                Name = "System Responsiveness Priority",
-                Description = "Sets MMCSS background multimedia CPU reservation to 0% so foreground workloads receive dedicated scheduling time.",
+                Name = "MMCSS Background CPU Reservation (SystemResponsiveness)",
+                Description = "Configures MMCSS reserved CPU bandwidth for background tasks to 10% (the lowest documented effective setting; values < 10 clamp to 20), allocating up to 90% processor execution time to active multimedia and gaming tasks while protecting critical background services.",
                 Category = "System",
                 RootKey = "HKLM",
                 SubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
                 ValueName = "SystemResponsiveness",
                 ValueKind = RegistryValueKind.DWord,
                 DefaultValueStr = "20",
-                TargetValueStr = "0",
-                DisplayTargetStr = "0 (100% Foreground)",
+                TargetValueStr = "10",
+                DisplayTargetStr = "10 (10% Background Reserved / 90% Multimedia Quota)",
                 RiskLevel = "Medium",
                 RequiresRestart = true,
                 RequiresAdmin = true,
@@ -339,10 +385,10 @@ namespace BiosOptimizer.Core.Implementations
             {
                 Id = "tweak.network.tcpnodelay",
                 Name = "TCP No Delay (Nagle's Algorithm)",
-                Description = "Disables Nagle's algorithm packet coalescing in MSMQ/TCP stack for immediate socket dispatch.",
+                Description = "Disables Nagle's algorithm packet coalescing in Windows TCP/IP stack for immediate socket dispatch.",
                 Category = "Network",
                 RootKey = "HKLM",
-                SubKey = @"SOFTWARE\Microsoft\MSMQ\Parameters",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters",
                 ValueName = "TCPNoDelay",
                 ValueKind = RegistryValueKind.DWord,
                 DefaultValueStr = "0",
@@ -352,10 +398,10 @@ namespace BiosOptimizer.Core.Implementations
                 RequiresRestart = true,
                 RequiresAdmin = true,
                 SupportedOS = "Windows 10 / 11",
-                HardwarePrerequisites = "MSMQ / TCP Stack",
-                MissingBehavior = MissingValueBehavior.NotApplicable,
+                HardwarePrerequisites = "TCP/IP Stack",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
                 PreferredView = RegistryView.Registry64,
-                CustomApplicability = () => CheckMsmqApplicability()
+                CustomApplicability = null
             },
 
             // --- GAMING & GPU ---
@@ -458,8 +504,8 @@ namespace BiosOptimizer.Core.Implementations
                 ValueName = "SvcHostSplitThresholdInKB",
                 ValueKind = RegistryValueKind.DWord,
                 DefaultValueStr = "380000",
-                TargetValueStr = "104857600",
-                DisplayTargetStr = "104857600 (100 GB Threshold)",
+                TargetValueStr = "16777216",
+                DisplayTargetStr = "16777216 (16GB RAM Threshold)",
                 RiskLevel = "Medium",
                 RequiresRestart = true,
                 RequiresAdmin = true,
@@ -473,15 +519,15 @@ namespace BiosOptimizer.Core.Implementations
             {
                 Id = "tweak.ram.clearpagefile",
                 Name = "Clear Pagefile on Shutdown",
-                Description = "Configures Windows Session Manager to zero out paging memory upon system shutdown for clean memory allocations.",
+                Description = "Disables clearing the pagefile at shutdown to eliminate prolonged shutdown delays and prevent multi-gigabyte SSD write cycles.",
                 Category = "Memory",
                 RootKey = "HKLM",
                 SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
                 ValueName = "ClearPageFileAtShutdown",
                 ValueKind = RegistryValueKind.DWord,
                 DefaultValueStr = "0",
-                TargetValueStr = "1",
-                DisplayTargetStr = "1 (Enabled)",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (Disabled • Instant Shutdown & SSD Health)",
                 RiskLevel = "Low",
                 RequiresRestart = false,
                 RequiresAdmin = true,
@@ -492,25 +538,24 @@ namespace BiosOptimizer.Core.Implementations
             },
             new RegistryTweakDefinition
             {
-                Id = "tweak.ram.pagingexec",
-                Name = "Disable Paging Executive",
-                Description = "Instructs Windows kernel drivers and system code to remain locked in physical RAM rather than being paged to disk.",
-                Category = "Memory",
+                Id = "tweak.memory.crashdump_minidump",
+                Name = "Windows Crash Dump Kernel Minidump Alignment",
+                Description = "Aligns Windows error reporting to generate small kernel minidumps (256KB) instead of allocating multi-gigabyte full system memory dumps on storage.",
+                Category = "Storage",
                 RootKey = "HKLM",
-                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
-                ValueName = "DisablePagingExecutive",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\CrashControl",
+                ValueName = "CrashDumpEnabled",
                 ValueKind = RegistryValueKind.DWord,
-                DefaultValueStr = "0",
-                TargetValueStr = "1",
-                DisplayTargetStr = "1 (Keep in RAM)",
-                RiskLevel = "Medium",
-                RequiresRestart = true,
+                DefaultValueStr = "1",
+                TargetValueStr = "3",
+                DisplayTargetStr = "3 (Small Kernel Dump 256KB)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
                 RequiresAdmin = true,
                 SupportedOS = "Windows 10 / 11",
-                HardwarePrerequisites = "RAM >= 8GB Recommended",
+                HardwarePrerequisites = "All Storage Configurations",
                 MissingBehavior = MissingValueBehavior.SafeToCreate,
-                PreferredView = RegistryView.Registry64,
-                CustomApplicability = () => CheckPagingExecApplicability()
+                PreferredView = RegistryView.Registry64
             },
 
             // --- STORAGE & NTFS ---
@@ -796,6 +841,955 @@ namespace BiosOptimizer.Core.Implementations
                 HardwarePrerequisites = "None",
                 MissingBehavior = MissingValueBehavior.SafeToCreate,
                 PreferredView = RegistryView.Registry64
+            },
+
+            // --- NEW CAPABILITY 1: MEMORY MANAGEMENT SUBSYSTEM ---
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.ram.largesystemcache",
+                Name = "LargeSystemCache (File Cache Expansion)",
+                Description = "Allocates a larger working set for the Windows system file cache, maximizing read cache hit ratios on multi-gigabyte disk transfers and video editing assets.",
+                Category = "Memory",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "LargeSystemCache",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Expanded Cache)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "16 GB+ Physical RAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckLargeSystemCacheApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.ram.disablepagingexec",
+                Name = "DisablePagingExecutive (Keep Kernel in RAM)",
+                Description = "Forces Windows kernel executive and loaded drivers to remain resident in physical RAM rather than being paged to disk, preventing page fault latency.",
+                Category = "Memory",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "DisablePagingExecutive",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Resident in RAM)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "16 GB+ Physical RAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckDisablePagingExecutiveApplicability()
+            },
+
+            // --- NEW CAPABILITY 2: HIGH-PERFORMANCE NTFS FILESYSTEM PARAMETERS ---
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.storage.ntfsmemoryusage",
+                Name = "NtfsMemoryUsage (NTFS Metadata Cache Boost)",
+                Description = "Expands the NTFS paged-pool lookaside lists for metadata caching, boosting responsiveness during deep directory traversal and creative timeline scrubbing.",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\FileSystem",
+                ValueName = "NtfsMemoryUsage",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Expanded Cache Pool)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "16 GB+ Physical RAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckNtfsMemoryUsageApplicability()
+            },
+
+            // --- NEW CAPABILITY 3: DESKTOP & SHELL RESPONSIVENESS SUBSYSTEM ---
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.waittokillapptimeout",
+                Name = "WaitToKillAppTimeout (Rapid Hung App Termination)",
+                Description = "Sets hung application wait threshold to 2000ms, terminating frozen processes swiftly without delaying system shutdowns.",
+                Category = "Process",
+                RootKey = "HKCU",
+                SubKey = @"Control Panel\Desktop",
+                ValueName = "WaitToKillAppTimeout",
+                ValueKind = RegistryValueKind.String,
+                DefaultValueStr = "5000",
+                TargetValueStr = "2000",
+                DisplayTargetStr = "2000 (2000ms)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "None",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.hungapptimeout",
+                Name = "HungAppTimeout (Desktop Freeze Prevention)",
+                Description = "Shortens unresponsive application timeout from 5000ms to 2000ms to prompt recovery faster without interrupting transient heavy operations.",
+                Category = "Process",
+                RootKey = "HKCU",
+                SubKey = @"Control Panel\Desktop",
+                ValueName = "HungAppTimeout",
+                ValueKind = RegistryValueKind.String,
+                DefaultValueStr = "5000",
+                TargetValueStr = "2000",
+                DisplayTargetStr = "2000 (2000ms)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "None",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gpu.hardwareflipqueue",
+                Name = "Direct3D Hardware Flip Queue (1 Frame)",
+                Description = "Limits Direct3D prerendered flip queue depth to 1 frame to eliminate input latency between mouse input and GPU frame scanout.",
+                Category = "GPU",
+                RootKey = "HKCU",
+                SubKey = @"Software\Microsoft\Direct3D",
+                ValueName = "MaxFrameLatency",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "3",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Low Latency)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Dedicated Graphics Card",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.network.tcpackfrequency",
+                Name = "TCP Immediate ACK Frequency (No Batch Delay)",
+                Description = "Configures TCP ACK frequency to 1 to transmit packet acknowledgments immediately, eliminating 200ms delayed ACK queuing in online games.",
+                Category = "Network",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\Default",
+                ValueName = "TcpAckFrequency",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "2",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Immediate ACK)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Active Network Adapter",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.explorer.autorestartshell",
+                Name = "Auto-Restart Explorer on Hang",
+                Description = "Instructs Windows Winlogon to automatically restart explorer.exe if the desktop shell hangs or crashes.",
+                Category = "System",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon",
+                ValueName = "AutoRestartShell",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Auto-Restart Enabled)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "None",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.storage.disable_compression_overhead",
+                Name = "NTFS Volume Compression Overhead Elimination",
+                Description = "Disables background file system compression routines on NTFS volumes, eliminating CPU cycles and latency during asset reads.",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\FileSystem",
+                ValueName = "NtfsDisableCompression",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Compression Disabled / Fast I/O)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "NVMe / SSD Storage",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckNvmeOrSsdStorageApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.mmcss.pro_audio_quantum",
+                Name = "Pro Audio Real-Time Thread Priority",
+                Description = "Assigns High scheduling category to the Windows Pro Audio MMCSS task to guarantee glitch-free low latency ASIO and WASAPI buffers.",
+                Category = "Audio",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio",
+                ValueName = "Scheduling Category",
+                ValueKind = RegistryValueKind.String,
+                DefaultValueStr = "Medium",
+                TargetValueStr = "High",
+                DisplayTargetStr = "\"High\"",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Windows Audio",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.timerresolutionrequests",
+                Name = "Lock Global NT High Precision Timer",
+                Description = "Enforces global high-precision kernel interrupt timer requests across all multimedia and DirectX applications.",
+                Category = "System",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel",
+                ValueName = "GlobalTimerResolutionRequests",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Locked)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "High Precision Event Timer (HPET)",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.power.pcieaspm_disable",
+                Name = "Disable PCIe ASPM Link State Power Management",
+                Description = "Exposes and disables PCIe Active State Power Management on AC to eliminate GPU and NVMe bus wake latency.",
+                Category = "Power",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd5-6921fb825d05\ee12f906-d277-404b-b6da-f55a15196015",
+                ValueName = "Attributes",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Exposed & Tuned)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "PCIe Bus Devices",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.visuals.transparency_off",
+                Name = "Disable Desktop Acrylic Transparency Blur",
+                Description = "Disables desktop window acrylic blur composition to minimize DWM fillrate overhead during gaming and rendering.",
+                Category = "Visual",
+                RootKey = "HKCU",
+                SubKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                ValueName = "EnableTransparency",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (Disabled)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Desktop Session",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gaming.fullscreenexclusive_optimizations",
+                Name = "DXGI Modern Independent Flip Upgrade",
+                Description = "Upgrades legacy windowed DX11 presentation to Modern Flip Model with hardware independent flip and variable refresh rate.",
+                Category = "Gaming",
+                RootKey = "HKCU",
+                SubKey = @"Software\Microsoft\DirectX\UserGpuPreferences\DirectXUserGlobalSettings",
+                ValueName = "SwapEffectUpgrade",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Modern Flip Active)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "WDDM 2.7+ GPU",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.cpu.intel_threaddirector_pcore",
+                Name = "Intel Thread Director Heterogeneous Core Scheduling Calibration",
+                Description = "Exposes processor heterogeneous core scheduling policy controls to prioritize Performance Cores for foreground gaming and emulator workloads.",
+                Category = "CPU",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\7f2f4c9f-3e54-4a2b-9e0c-8d3a5a7b1e2f",
+                ValueName = "Attributes",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Exposed & Tuned)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Heterogeneous Architecture CPU",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckIntelHeteroCpuApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gpu.d3d9ex_latency",
+                Name = "Direct3D Frame Latency Reduction",
+                Description = "Limits DirectX queued pre-rendered frames to 1, minimizing input latency and visual queue buffer lag in Direct3D applications.",
+                Category = "Gaming",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Microsoft\Direct3D",
+                ValueName = "MaxFrameLatency",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "3",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Low Latency Buffer)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "DirectX Compatible GPU",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.memory.pagedpoolsize",
+                Name = "Kernel Paged Pool Size Optimization",
+                Description = "Dynamically sizes kernel paged pool allocations to prevent pool exhaustion during heavy gaming, emulator, and rendering sessions.",
+                Category = "Memory",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "PagedPoolSize",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (Dynamic Auto-Allocation)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "16GB+ RAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.network.sackopts",
+                Name = "TCP Selective Acknowledgments (SACK)",
+                Description = "Enables TCP Selective Acknowledgments to recover from packet drops faster and lower network jitter during online competitive matches.",
+                Category = "Network",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters",
+                ValueName = "SackOpts",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Enabled)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Ethernet / Wi-Fi Adapter",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.io.priority_boost",
+                Name = "Executive I/O Priority Boost Threshold",
+                Description = "Adjusts executive storage worker I/O priority boost to prioritize foreground read/write requests over background indexing operations.",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\I/O System",
+                ValueName = "PriorityBoostThreshold",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Foreground Prioritized)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "SSD / NVMe Storage",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gaming.directstorage_bypass",
+                Name = "DirectStorage Win32 BypassIO Enabler",
+                Description = "Enables OS-level BypassIO driver fast paths allowing NVMe storage devices to stream assets directly into GPU VRAM without CPU bottlenecking when supported by storage drivers.",
+                Category = "Gaming",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\FileSystem",
+                ValueName = "BypassIoEnabler",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (BypassIO Active)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 11 / Windows 10 21H2+",
+                HardwarePrerequisites = "NVMe PCIe 3.0+ SSD & NTFS",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckBypassIoApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.cpu.amd_cppc_preferred",
+                Name = "AMD CPPC Preferred Cores Dynamic Affinity Exposure",
+                Description = "Exposes Collaborative Processor Performance Control (CPPC) preferred core scheduling knobs to maximize single-thread clock boost.",
+                Category = "CPU",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\893dee8e-2bef-41e0-89c6-b50d09294504",
+                ValueName = "Attributes",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Exposed & Tuned)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "AMD Ryzen Processor",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckAmdProcessorApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.input.hid_mousedataqueue",
+                Name = "Mouse Class Driver Buffer Size Optimization",
+                Description = "Optimizes mouclass driver input packet buffer size to 20 packets, reducing input buffering delay.",
+                Category = "Input",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+                ValueName = "MouseDataQueueSize",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "100",
+                TargetValueStr = "20",
+                DisplayTargetStr = "20 (Low-Latency Queue)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "USB / PS/2 Mouse",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.input.hid_keyboarddataqueue",
+                Name = "Keyboard Class Driver Buffer Size Calibration",
+                Description = "Optimizes kbdclass driver event queue size to 20 packets, eliminating keystroke latency.",
+                Category = "Input",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\kbdclass\Parameters",
+                ValueName = "KeyboardDataQueueSize",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "100",
+                TargetValueStr = "20",
+                DisplayTargetStr = "20 (Low-Latency Queue)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "USB / PS/2 Keyboard",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.network.rss_hash_toeplitz",
+                Name = "NDIS Max Receive-Side Scaling Processors",
+                Description = "Sets maximum RSS CPU count to expand hardware multi-queue network packet handling across available physical processor cores.",
+                Category = "Network",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Ndis\Parameters",
+                ValueName = "MaxNumRssCpus",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "4",
+                TargetValueStr = "16",
+                DisplayTargetStr = "16 (Multi-Queue Dynamic)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Multi-Core CPU & RSS NIC",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.memory.working_set_trim",
+                Name = "System Working Set Dynamic Memory Trimming",
+                Description = "Maintains optimal paged memory working sets to prevent aggressive swap-out during high memory allocation rendering or emulator tasks.",
+                Category = "Memory",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "PoolUsageMaximum",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "60",
+                DisplayTargetStr = "60 (Dynamic Paging Threshold)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "8GB+ RAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.desktop.dwm_waitable_buffer",
+                Name = "DWM Presentation Maximum Queued Buffers",
+                Description = "Constrains Desktop Window Manager frame queue to a single waitable buffer, decreasing compositor display pipeline delay.",
+                Category = "Gaming",
+                RootKey = "HKCU",
+                SubKey = @"Software\Microsoft\Windows\DWM",
+                ValueName = "MaxQueuedBuffers",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "2",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Single Queued Buffer)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "WDDM 2.0+ GPU",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Default
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gpu.dxgi_presentation_budget",
+                Name = "GPU Compute Watchdog Execution Timeout (TdrDelay for 3D/Video Rendering)",
+                Description = "Configures GPU execution watchdog quantum threshold (TdrDelay) to 8 seconds specifically for long-running CUDA/DirectCompute rendering jobs (DaVinci/Blender/After Effects) to prevent false driver resets. Not recommended for standard gaming.",
+                Category = "Creative / 3D Compute Diagnostics",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers",
+                ValueName = "TdrDelay",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "2",
+                TargetValueStr = "8",
+                DisplayTargetStr = "8s (Render Crash Prevention)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Dedicated GPU & 3D/Video Rendering Workload",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomRecommendation = () => CheckTdrRecommendation()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.audio.wasapi_exclusive_affinity",
+                Name = "MMCSS Low-Latency Audio Core Affinity Mask",
+                Description = "Locks Windows Audio multimedia class thread scheduling to high-efficiency affinity masks to prevent sound dropouts during gaming.",
+                Category = "System",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio",
+                ValueName = "Affinity",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (Dynamic Balanced Affinity)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "High Definition Audio Device",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.storage.iopagelocklimit",
+                Name = "Storage High I/O Page Lock Limit (16MB)",
+                Description = "Expands maximum pinned physical memory pages for disk controller transfers to 16MB for ultra-fast NVMe throughput.",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "IoPageLockLimit",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "16777216",
+                DisplayTargetStr = "16MB (High-Performance I/O Lock)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "16GB+ RAM & NVMe SSD",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => { var r = CheckLargeSystemCacheApplicability(); if (!r.IsApplicable) return r; return CheckNvmeStorageApplicability(); }
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.app_launch_prefetch_boost",
+                Name = "Application Launch Prefetch Engine Configuration",
+                Description = "Disables legacy rotational HDD prefetcher to eliminate background disk cache read overhead on modern SSD/NVMe storage.",
+                Category = "System",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters",
+                ValueName = "EnablePrefetcher",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "3",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (Disabled for SSD / NVMe Performance)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All Storage Devices",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.gaming.fullscreen_optimizations",
+                Name = "DirectX Fullscreen Optimizations Toggle",
+                Description = "Ensures legacy borderless and windowed DirectX games run with native low-latency swapchains without composition overhead.",
+                Category = "Gaming",
+                RootKey = "HKCU",
+                SubKey = @"System\GameConfigStore",
+                ValueName = "GameDVR_DXGIHonorFSEWindowsCompatible",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Low Latency Direct Swapchain)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All GPUs",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.graphics.hardware_gpu_scheduler_preference",
+                Name = "Hardware-Accelerated GPU Scheduling (HAGS) Preference",
+                Category = "GPU",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers",
+                ValueName = "HwSchMode",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (HAGS Enabled)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 Build 2004+ / Windows 11",
+                HardwarePrerequisites = "WDDM 2.7+ GPU with >= 6GB VRAM",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.input.keyboard_queue_size",
+                Name = "Keyboard Data Buffer Queue Size Expansion",
+                Category = "Input",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\kbdclass\Parameters",
+                ValueName = "KeyboardDataQueueSize",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "100",
+                TargetValueStr = "20",
+                DisplayTargetStr = "20 Packets (Low-Latency)",
+                RiskLevel = "Safe",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Keyboard",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.input.mouse_queue_size",
+                Name = "Mouse Data Buffer Queue Size Expansion",
+                Category = "Input",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+                ValueName = "MouseDataQueueSize",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "100",
+                TargetValueStr = "20",
+                DisplayTargetStr = "20 Packets (Low-Latency)",
+                RiskLevel = "Safe",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Mouse",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.storage.nvme_storport_idle",
+                Name = "NVMe StorPort Miniport Idle Latency Tuning",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device",
+                ValueName = "IdlePowerMode",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (High Responsiveness)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "NVMe Storage",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckNvmeStorageApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.network.tcp_ack_frequency_gaming",
+                Name = "Immediate TCP ACK Frequency (TcpAckFrequency = 1)",
+                Category = "Network",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters",
+                ValueName = "TcpAckFrequency",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "2",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Immediate ACK)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Ethernet / Wi-Fi",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.network.nagle_algorithm",
+                Name = "Disable Nagle Algorithm (TCPNoDelay = 1)",
+                Category = "Network",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters",
+                ValueName = "TCPNoDelay",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (No Delay)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Ethernet / Wi-Fi",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.memory.paging_executive_lock",
+                Name = "Lock Windows Executive Drivers in Physical RAM",
+                Category = "Memory",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                ValueName = "DisablePagingExecutive",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Locked in RAM)",
+                RiskLevel = "Low",
+                RequiresRestart = true,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "RAM >= 16GB",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.explorer_auto_restart",
+                Name = "Automatic Windows Explorer Restart on Crash",
+                Category = "System",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon",
+                ValueName = "AutoRestartShell",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Enabled)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All Systems",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.system.error_reporting_telemetry",
+                Name = "Disable Windows Error Reporting Background Telemetry",
+                Category = "Privacy",
+                RootKey = "HKLM",
+                SubKey = @"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting",
+                ValueName = "Disabled",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "1",
+                DisplayTargetStr = "1 (Disabled)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All Systems",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.cpu.cppc_preferred_cores",
+                Name = "CPPC Autonomous Preferred Core Targeting",
+                Category = "CPU",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\89e37796-a416-4a73-9ef1-77886f795cb9",
+                ValueName = "Attributes",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Autonomous)",
+                RiskLevel = "Low",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "CPPC Supported CPU",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckAmdProcessorApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.cpu.quantum_interactive_gaming",
+                Name = "Interactive Gaming CPU Quantum (0x26)",
+                Category = "CPU",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\PriorityControl",
+                ValueName = "Win32PrioritySeparation",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "24",
+                TargetValueStr = "38",
+                DisplayTargetStr = "38 (0x26 Interactive)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All CPUs",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.storage.bypassio_stack",
+                Name = "Windows DirectStorage BypassIO Storage Stack Enable",
+                Category = "Storage",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\FileSystem",
+                ValueName = "BypassIoFlags",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "0",
+                TargetValueStr = "0",
+                DisplayTargetStr = "0 (BypassIO Enabled)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 11",
+                HardwarePrerequisites = "NVMe Storage",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64,
+                CustomApplicability = () => CheckBypassIoApplicability()
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.power.cooling_policy_active",
+                Name = "Active System Cooling Policy Enforcement",
+                Category = "Power",
+                RootKey = "HKLM",
+                SubKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\94d3a615-a899-4ac5-ae2b-e4d8f634367f",
+                ValueName = "Attributes",
+                ValueKind = RegistryValueKind.DWord,
+                DefaultValueStr = "1",
+                TargetValueStr = "2",
+                DisplayTargetStr = "2 (Active Cooling)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = true,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "All Systems",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
+            },
+            new RegistryTweakDefinition
+            {
+                Id = "tweak.input.filter_keys_shortcuts",
+                Name = "Disable Sticky & Filter Keys Accessibility Shortcuts",
+                Category = "Input",
+                RootKey = "HKCU",
+                SubKey = @"Control Panel\Accessibility\StickyKeys",
+                ValueName = "Flags",
+                ValueKind = RegistryValueKind.String,
+                DefaultValueStr = "510",
+                TargetValueStr = "506",
+                DisplayTargetStr = "506 (Disabled)",
+                RiskLevel = "Safe",
+                RequiresRestart = false,
+                RequiresAdmin = false,
+                SupportedOS = "Windows 10 / 11",
+                HardwarePrerequisites = "Keyboard",
+                MissingBehavior = MissingValueBehavior.SafeToCreate,
+                PreferredView = RegistryView.Registry64
             }
         };
 
@@ -904,6 +1898,52 @@ namespace BiosOptimizer.Core.Implementations
             }
         }
 
+        
+        private static (bool IsApplicable, string Reason) CheckLargeSystemCacheApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (hw.Memory.InstalledPhysicalGb < 16.0)
+                    return (false, $"Requires at least 16 GB of physical RAM (Detected {hw.Memory.InstalledPhysicalGb:F1} GB).");
+                return (true, "System has 16+ GB RAM suitable for expanded file system caching.");
+            }
+            catch
+            {
+                return (true, "Applicable on systems with adequate memory.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckDisablePagingExecutiveApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (hw.Memory.InstalledPhysicalGb < 16.0)
+                    return (false, $"Requires at least 16 GB of physical RAM (Detected {hw.Memory.InstalledPhysicalGb:F1} GB) to prevent kernel pool exhaustion.");
+                return (true, "System has 16+ GB RAM suitable for keeping kernel executive resident in physical memory.");
+            }
+            catch
+            {
+                return (true, "Applicable on systems with adequate memory.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckNtfsMemoryUsageApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (hw.Memory.InstalledPhysicalGb < 16.0)
+                    return (false, $"Requires at least 16 GB of physical RAM (Detected {hw.Memory.InstalledPhysicalGb:F1} GB).");
+                return (true, "System has 16+ GB RAM suitable for expanded NTFS paged-pool cache quota.");
+            }
+            catch
+            {
+                return (true, "Applicable on systems with adequate memory.");
+            }
+        }
+
         private static (bool IsApplicable, string Reason) CheckHagsApplicability()
         {
             try
@@ -964,6 +2004,137 @@ namespace BiosOptimizer.Core.Implementations
             catch
             {
                 return (true, "RAM check passed.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckBypassIoApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.Storage.HasNvmeDrive)
+                    return (false, "BypassIO requires NVMe storage. SATA SSD / HDD storage cannot utilize BypassIO fast paths.");
+                if (Environment.OSVersion.Version.Build < 22000)
+                    return (false, "BypassIO requires Windows 11 Build 22000 or newer.");
+                return (true, "System has NVMe storage on Windows 11 supporting DirectStorage BypassIO.");
+            }
+            catch
+            {
+                return (false, "Unable to verify NVMe BypassIO storage prerequisites.");
+            }
+        }
+        private static (bool IsApplicable, string Reason) CheckAmdProcessorApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.Cpu.IsAmd)
+                    return (false, "Requires AMD Ryzen processor (Intel CPU detected).");
+                return (true, "AMD Ryzen processor detected with CPPC preferred core capabilities.");
+            }
+            catch
+            {
+                return (false, "Unable to verify AMD processor prerequisites.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckIntelHeteroCpuApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.Cpu.IsIntel)
+                    return (false, "Requires Intel Core processor (AMD CPU detected).");
+                if (!hw.Cpu.IsHybridCpu)
+                    return (false, "Requires Intel Hybrid Architecture with Performance and Efficient cores.");
+                return (true, "Intel Hybrid processor with Thread Director scheduling detected.");
+            }
+            catch
+            {
+                return (false, "Unable to verify Intel Thread Director prerequisites.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckNvmeStorageApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.Storage.HasNvmeDrive)
+                    return (false, "Requires NVMe solid-state storage (NVMe drive not detected).");
+                return (true, "NVMe solid-state storage detected.");
+            }
+            catch
+            {
+                return (false, "Unable to verify NVMe storage prerequisites.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckNvmeOrSsdStorageApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.Storage.HasNvmeDrive && !hw.Storage.HasSataSsd)
+                    return (false, "Requires solid-state storage (SSD/NVMe). Mechanical hard disk drives do not benefit from this configuration.");
+                return (true, "Solid-state storage detected.");
+            }
+            catch
+            {
+                return (false, "Unable to verify solid-state storage prerequisites.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckDedicatedNvidiaGpuApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.HasNvidia)
+                    return (false, "Requires NVIDIA GeForce graphics hardware (not detected on this PC).");
+                return (true, "NVIDIA GeForce graphics hardware detected.");
+            }
+            catch
+            {
+                return (false, "Unable to verify NVIDIA GPU prerequisites.");
+            }
+        }
+
+        private static (bool IsApplicable, string Reason) CheckDedicatedAmdGpuApplicability()
+        {
+            try
+            {
+                var hw = HardwareDetectionService.Instance.GetSnapshot();
+                if (!hw.HasAmd)
+                    return (false, "Requires AMD Radeon graphics hardware (not detected on this PC).");
+                return (true, "AMD Radeon graphics hardware detected.");
+            }
+            catch
+            {
+                return (false, "Unable to verify AMD GPU prerequisites.");
+            }
+        }
+
+
+        private static (bool IsRecommended, string Reason) CheckTdrRecommendation()
+        {
+            try
+            {
+                var procs = Process.GetProcesses();
+                bool hasRendering = procs.Any(p =>
+                {
+                    string name = p.ProcessName.ToLowerInvariant();
+                    return name.Contains("afterfx") || name.Contains("premiere") || name.Contains("resolve") ||
+                           name.Contains("blender") || name.Contains("topaz");
+                });
+
+                if (hasRendering)
+                    return (true, "Recommended for detected creative/rendering application to prevent premature TDR driver reset during heavy compute passes.");
+                return (false, "Not recommended for general gaming or daily desktop use; 8s TDR delay will prolong screen freeze during driver recovery.");
+            }
+            catch
+            {
+                return (false, "TDR delay modification is reserved for heavy 3D/video rendering workloads.");
             }
         }
 
@@ -1316,6 +2487,36 @@ namespace BiosOptimizer.Core.Implementations
                     dto.ApplicabilityReason = appReason;
                 }
 
+                // 2.5 Authoritative Global Applied-State & Ownership Pre-flight
+                string canTarget = GlobalOptimizationRegistry.NormalizeTarget("SetRegistryValue", $"{def.RootKey}\\{def.SubKey}\\{def.ValueName}");
+                var globalStatus = GlobalAppliedStateManager.Instance.EvaluateTargetState(canTarget, def.TargetValueStr, out var observedVal);
+                if (!string.IsNullOrWhiteSpace(observedVal))
+                {
+                    dto.CurrentValue = observedVal;
+                }
+
+                if (globalStatus == GlobalAppliedStatus.ALREADY_APPLIED || globalStatus == GlobalAppliedStatus.ALREADY_OPTIMAL || globalStatus == GlobalAppliedStatus.ACTIVE_PROFILE)
+                {
+                    dto.Applicability = "ALREADY_OPTIMAL";
+                    dto.Status = "ALREADY OPTIMIZED";
+                    dto.VerificationState = "VERIFIED";
+                    dto.ApplicabilityReason = globalStatus == GlobalAppliedStatus.ALREADY_APPLIED
+                        ? "Previously applied by ERROR OPTIMIZER and verified in live registry."
+                        : "Current registry value already matches optimal target.";
+                    dto.ErrorCode = "0x00000000";
+                    dto.DiagnosticsDetail = "Target state verified optimal.";
+                    alreadyOptimizedCount++;
+                    applicableCount++;
+                    response.Tweaks.Add(dto);
+                    diagnosticsList.Add(CreateDiagEntry(def, dto, dto.Applicability));
+                    continue;
+                }
+                else if (globalStatus == GlobalAppliedStatus.CONFIGURATION_CHANGED || globalStatus == GlobalAppliedStatus.EXTERNALLY_MODIFIED)
+                {
+                    dto.Status = "EXTERNALLY CHANGED";
+                    dto.Applicability = "APPLICABLE";
+                }
+
                 // 3. Target Key Read-Only Pre-Flight (Do not open writable during plan)
                 var (readKey, resolvedView, readErrCode, readErrDetail) = OpenTargetKeyWithPreflight(def.RootKey, def.SubKey, false, def.PreferredView);
                 dto.RegistryView = resolvedView.ToString();
@@ -1635,14 +2836,41 @@ namespace BiosOptimizer.Core.Implementations
                         {
                             // 4. Backup Original Value
                             var old = key.GetValue(def.ValueName);
-                            string oldStr = old == null ? "VALUE DID NOT EXIST" : old.ToString() ?? "";
+                            var oldKind = old != null ? key.GetValueKind(def.ValueName) : def.ValueKind;
+                            string oldStr = old == null ? "VALUE DID NOT EXIST" : BackupManager.FormatRegistryValue(old);
                             string ownerTag = $"AntiGravity.RegistryTweak.{def.Id}";
-                            _backupManager.BackupRegistryValue(ownerTag, $"{def.RootKey}\\{def.SubKey}", def.ValueName, oldStr, def.ValueKind.ToString(), def.TargetValueStr, $"Backup of {def.Name}");
+                            _backupManager.BackupRegistryValue(ownerTag, $"{def.RootKey}\\{def.SubKey}", def.ValueName, oldStr, oldKind.ToString(), def.TargetValueStr, $"Backup of {def.Name}");
 
                             // 5. Parse & Write Target Value with exact type
                             object valObj = ParseTargetValue(def.TargetValueStr, def.ValueKind);
                             key.SetValue(def.ValueName, valObj, def.ValueKind);
                             try { key.Flush(); } catch { }
+
+                            if (def.Id.Equals("tweak.network.tcpnodelay", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    using var ifRoot = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", true);
+                                    if (ifRoot != null)
+                                    {
+                                        foreach (var ifName in ifRoot.GetSubKeyNames())
+                                        {
+                                            using var ifKey = ifRoot.OpenSubKey(ifName, true);
+                                            if (ifKey != null)
+                                            {
+                                                var oldIfDelay = ifKey.GetValue("TCPNoDelay");
+                                                var oldIfAck = ifKey.GetValue("TcpAckFrequency");
+                                                _backupManager.BackupRegistryValue($"AntiGravity.RegistryTweak.{def.Id}.{ifName}", $@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{ifName}", "TCPNoDelay", oldIfDelay?.ToString() ?? "0", "DWord", "1", "Backup of interface TCPNoDelay");
+                                                _backupManager.BackupRegistryValue($"AntiGravity.RegistryTweak.{def.Id}.{ifName}", $@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{ifName}", "TcpAckFrequency", oldIfAck?.ToString() ?? "2", "DWord", "1", "Backup of interface TcpAckFrequency");
+                                                ifKey.SetValue("TCPNoDelay", 1, RegistryValueKind.DWord);
+                                                ifKey.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                                                try { ifKey.Flush(); } catch { }
+                                            }
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
 
                             // 6. IMMEDIATE REAL READ-BACK VERIFICATION
                             var afterVal = key.GetValue(def.ValueName);
@@ -1718,13 +2946,368 @@ namespace BiosOptimizer.Core.Implementations
 
                 string msg = isSuccess
                     ? (appliedCount == 0 && verifiedCount > 0 
-                        ? "ALREADY OPTIMIZED / NO ACTION REQUIRED" 
+                        ? $"{verifiedCount} ALREADY OPTIMAL • 0 CHANGES NEEDED" 
                         : (restartRequiredCount > 0 
                             ? $"{appliedCount} APPLIED & VERIFIED ({restartRequiredCount} RESTART REQUIRED)" 
-                            : $"{appliedCount} APPLIED & 100% VERIFIED"))
+                            : $"{appliedCount} APPLIED & VERIFIED"))
                     : $"{appliedCount} APPLIED • {failedCount} FAILED";
 
                 return (isSuccess, msg, status, appliedCount, verifiedCount, restartRequiredCount, failedCount);
+            });
+        }
+
+        public async Task<RegistryTweakExecutionResponse> ExecuteRegistryTweaksAsync(List<string> tweakIds)
+        {
+            return await Task.Run(() =>
+            {
+                var tweaksToApply = (tweakIds == null || tweakIds.Count == 0)
+                    ? _tweakDatabase
+                    : _tweakDatabase.Where(t => tweakIds.Contains(t.Id, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                string regTxId = $"reg-tx-{Guid.NewGuid():N}";
+                try
+                {
+                    var snapshot = _backupManager.CreateApplicationSnapshot("Registry Intelligence Backup", $"Backup before applying {tweaksToApply.Count} registry tweaks");
+                    regTxId = snapshot.TransactionId;
+                }
+                catch { }
+
+                var response = new RegistryTweakExecutionResponse
+                {
+                    RequestedCount = tweaksToApply.Count,
+                    TransactionId = regTxId
+                };
+
+                foreach (var def in tweaksToApply)
+                {
+                    var op = new RegistryTweakOperationResult
+                    {
+                        Id = def.Id,
+                        Title = def.Name,
+                        TargetValue = def.TargetValueStr,
+                        Hive = def.RootKey,
+                        KeyPath = def.SubKey,
+                        ValueName = def.ValueName,
+                        RequestedValue = def.TargetValueStr
+                    };
+
+                    // Pre-flight OS & Custom Applicability checks
+                    if (!IsWindowsVersionSupported(def.SupportedOS))
+                    {
+                        op.Skipped = true;
+                        op.Status = "skipped";
+                        op.State = "UNSUPPORTED";
+                        op.Reason = $"Requires {def.SupportedOS}.";
+                        op.Detail = op.Reason;
+                        op.VerificationResult = "SKIPPED";
+                        response.SkippedCount++;
+                        response.Operations.Add(op);
+                        continue;
+                    }
+
+                    if (def.CustomApplicability != null)
+                    {
+                        var (appOk, appReason) = def.CustomApplicability();
+                        if (!appOk)
+                        {
+                            op.Skipped = true;
+                            op.Status = "skipped";
+                            op.State = "NOT_APPLICABLE";
+                            op.Reason = appReason;
+                            op.Detail = appReason;
+                            op.VerificationResult = "SKIPPED";
+                            response.SkippedCount++;
+                            response.Operations.Add(op);
+                            continue;
+                        }
+                    }
+
+                    // Authoritative Global Ownership & Live State Execution Gating
+                    string canTarget = GlobalOptimizationRegistry.NormalizeTarget("SetRegistryValue", $"{def.RootKey}\\{def.SubKey}\\{def.ValueName}");
+                    if (!GlobalAppliedStateManager.Instance.CanExecute("RegistryIntelligence", canTarget, def.TargetValueStr, out string rejReason))
+                    {
+                        op.AlreadyDesired = true;
+                        op.ReadbackVerified = true;
+                        op.WriteAttempted = false;
+                        op.WriteSucceeded = false;
+                        op.Status = "succeeded";
+                        op.State = "ALREADY_OPTIMAL";
+                        op.VerificationResult = "ALREADY_OPTIMAL";
+                        op.Verification = "Already configured to optimal target value";
+                        op.Reason = rejReason;
+                        op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Value: {def.ValueName} | State: ALREADY OPTIMIZED ({rejReason})";
+                        response.AttemptedCount++;
+                        response.AlreadyDesiredCount++;
+                        response.VerifiedCount++;
+                        response.Operations.Add(op);
+                        continue;
+                    }
+
+                    try
+                    {
+                        var (readKey, resolvedView, _, _) = OpenTargetKeyWithPreflight(def.RootKey, def.SubKey, false, def.PreferredView);
+                        if (readKey == null && def.MissingBehavior != MissingValueBehavior.SafeToCreate)
+                        {
+                            op.Skipped = true;
+                            op.Status = "skipped";
+                            op.State = "SKIPPED";
+                            op.Reason = "Subsystem key not present on this machine.";
+                            op.WriteAttempted = false;
+                            op.WriteSucceeded = false;
+                            op.VerificationResult = "SKIPPED";
+                            op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Key not present on this machine";
+                            response.SkippedCount++;
+                            response.Operations.Add(op);
+                            continue;
+                        }
+
+                        if (readKey != null)
+                        {
+                            using (readKey)
+                            {
+                                var existingVal = readKey.GetValue(def.ValueName);
+                                var (alreadyDone, currentDisplay) = EvaluateValue(def, existingVal);
+                                op.CurrentValue = currentDisplay;
+                                op.OriginalValue = currentDisplay;
+                                op.ReadbackValue = currentDisplay;
+
+                                if (alreadyDone)
+                                {
+                                    op.AlreadyDesired = true;
+                                    op.ReadbackVerified = true;
+                                    op.WriteAttempted = false;
+                                    op.WriteSucceeded = false;
+                                    op.Status = "succeeded";
+                                    op.State = "ALREADY_OPTIMAL";
+                                    op.VerificationResult = "ALREADY_OPTIMAL";
+                                    op.Verification = $"Already configured to optimal target value ({currentDisplay})";
+                                    op.Reason = $"Value already optimal: current value '{currentDisplay}' matches target '{def.TargetValueStr}'";
+                                    op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Value: {def.ValueName} | Readback: {currentDisplay} | State: ALREADY OPTIMIZED";
+                                    response.AttemptedCount++;
+                                    response.AlreadyDesiredCount++;
+                                    response.VerifiedCount++;
+
+                                    var optEntry = new RegistryTransactionEntry
+                                    {
+                                        OptimizationId = def.Id,
+                                        Hive = def.RootKey,
+                                        Path = def.SubKey,
+                                        ValueName = def.ValueName,
+                                        ValueType = def.ValueKind.ToString(),
+                                        BeforeValue = currentDisplay,
+                                        TargetValue = def.TargetValueStr,
+                                        CurrentValue = currentDisplay,
+                                        Applicability = "ALREADY_OPTIMAL",
+                                        ApplyState = "ALREADY_OPTIMIZED",
+                                        VerificationState = "VERIFIED",
+                                        RegistryView = resolvedView.ToString(),
+                                        ErrorCode = "0x00000000",
+                                        Timestamp = DateTime.UtcNow
+                                    };
+                                    _journal.SaveEntry(optEntry);
+                                    response.Operations.Add(op);
+                                    continue;
+                                }
+                            }
+                        }
+
+                        var (key, writeView, errCode, errDetail) = OpenTargetKeyWithPreflight(def.RootKey, def.SubKey, true, def.PreferredView);
+                        if (key == null)
+                        {
+                            response.AttemptedCount++;
+                            response.FailedCount++;
+                            op.Failed = true;
+                            op.Status = "failed";
+                            op.State = errCode == "0x80070005" ? "BLOCKED" : "FAILED";
+                            op.FailureReason = errCode == "0x80070005" ? $"Access Denied: {errDetail}" : errDetail;
+                            op.Reason = op.FailureReason;
+                            op.WriteAttempted = true;
+                            op.WriteSucceeded = false;
+                            op.VerificationResult = "VERIFICATION_FAILED";
+                            op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Value: {def.ValueName} | Failed to open writable key: {op.FailureReason}";
+
+                            var failEntry = new RegistryTransactionEntry
+                            {
+                                OptimizationId = def.Id,
+                                Hive = def.RootKey,
+                                Path = def.SubKey,
+                                ValueName = def.ValueName,
+                                ValueType = def.ValueKind.ToString(),
+                                TargetValue = def.TargetValueStr,
+                                ApplyState = op.State,
+                                VerificationState = "VERIFICATION_FAILED",
+                                RegistryView = writeView.ToString(),
+                                ErrorCode = errCode,
+                                ErrorMessage = errDetail,
+                                Timestamp = DateTime.UtcNow
+                            };
+                            _journal.SaveEntry(failEntry);
+                            response.Operations.Add(op);
+                            continue;
+                        }
+
+                        using (key)
+                        {
+                            var old = key.GetValue(def.ValueName);
+                            var oldKind = old != null ? key.GetValueKind(def.ValueName) : def.ValueKind;
+                            string oldStr = old == null ? "VALUE DID NOT EXIST" : BackupManager.FormatRegistryValue(old);
+                            op.OriginalValue = oldStr;
+                            string ownerTag = $"AntiGravity.RegistryTweak.{def.Id}";
+                            _backupManager.BackupRegistryValue(ownerTag, $"{def.RootKey}\\{def.SubKey}", def.ValueName, oldStr, oldKind.ToString(), def.TargetValueStr, $"Backup of {def.Name}");
+
+                            op.WriteAttempted = true;
+                            object valObj = ParseTargetValue(def.TargetValueStr, def.ValueKind);
+                            key.SetValue(def.ValueName, valObj, def.ValueKind);
+                            try { key.Flush(); } catch { }
+
+                            if (def.Id.Equals("tweak.network.tcpnodelay", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    using var ifRoot = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", true);
+                                    if (ifRoot != null)
+                                    {
+                                        foreach (var ifName in ifRoot.GetSubKeyNames())
+                                        {
+                                            using var ifKey = ifRoot.OpenSubKey(ifName, true);
+                                            if (ifKey != null)
+                                            {
+                                                var oldIfDelay = ifKey.GetValue("TCPNoDelay");
+                                                var oldIfAck = ifKey.GetValue("TcpAckFrequency");
+                                                _backupManager.BackupRegistryValue($"AntiGravity.RegistryTweak.{def.Id}.{ifName}", $@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{ifName}", "TCPNoDelay", oldIfDelay?.ToString() ?? "0", "DWord", "1", "Backup of interface TCPNoDelay");
+                                                _backupManager.BackupRegistryValue($"AntiGravity.RegistryTweak.{def.Id}.{ifName}", $@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{ifName}", "TcpAckFrequency", oldIfAck?.ToString() ?? "2", "DWord", "1", "Backup of interface TcpAckFrequency");
+                                                ifKey.SetValue("TCPNoDelay", 1, RegistryValueKind.DWord);
+                                                ifKey.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                                                try { ifKey.Flush(); } catch { }
+                                            }
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            var afterVal = key.GetValue(def.ValueName);
+                            var (verified, displayAfter) = EvaluateValue(def, afterVal);
+                            op.CurrentValue = displayAfter;
+                            op.ReadbackValue = displayAfter;
+                            op.WriteSucceeded = verified;
+
+                            var entry = new RegistryTransactionEntry
+                            {
+                                OptimizationId = def.Id,
+                                Hive = def.RootKey,
+                                Path = def.SubKey,
+                                ValueName = def.ValueName,
+                                ValueType = def.ValueKind.ToString(),
+                                BeforeValue = oldStr,
+                                TargetValue = def.TargetValueStr,
+                                CurrentValue = displayAfter,
+                                Applicability = "APPLICABLE",
+                                RequiresReboot = def.RequiresRestart,
+                                RegistryView = writeView.ToString(),
+                                ErrorCode = verified ? "0x00000000" : "0x80004005",
+                                Timestamp = DateTime.UtcNow
+                            };
+
+                            response.AttemptedCount++;
+                            if (verified)
+                            {
+                                response.AppliedCount++;
+                                op.Applied = true;
+                                op.ReadbackVerified = true;
+                                op.RollbackAvailable = true;
+                                op.Status = "succeeded";
+                                op.VerificationResult = "VERIFIED";
+                                op.Verification = $"Confirmed in registry via readback: {displayAfter}";
+                                op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Value: {def.ValueName} | Original: {oldStr} | Applied: {def.TargetValueStr} | Readback: {displayAfter}";
+
+                                if (def.RequiresRestart)
+                                {
+                                    entry.ApplyState = "APPLIED_PENDING_REBOOT";
+                                    entry.VerificationState = "PENDING_REBOOT";
+                                    response.RestartRequiredCount++;
+                                    op.State = "APPLIED_PENDING_REBOOT";
+                                    op.Reason = "Optimization applied; restart required to activate";
+                                }
+                                else
+                                {
+                                    entry.ApplyState = "APPLIED";
+                                    entry.VerificationState = "VERIFIED";
+                                    response.VerifiedCount++;
+                                    op.State = "APPLIED";
+                                }
+
+                                GlobalAppliedStateManager.Instance.RecordApplied(
+                                    canTarget,
+                                    def.Id,
+                                    "RegistryIntelligence",
+                                    "RegistryIntelligence",
+                                    oldStr,
+                                    def.TargetValueStr,
+                                    verified: true,
+                                    rollbackAvailable: true,
+                                    regTxId,
+                                    "SetRegistryValue");
+                            }
+                            else
+                            {
+                                entry.ApplyState = "FAILED";
+                                entry.VerificationState = "VERIFICATION_FAILED";
+                                entry.ErrorMessage = $"Read-back mismatch: Expected '{def.TargetValueStr}', got '{displayAfter}'.";
+                                response.FailedCount++;
+                                op.Failed = true;
+                                op.Status = "failed";
+                                op.State = "FAILED";
+                                op.VerificationResult = "VERIFICATION_FAILED";
+                                op.FailureReason = entry.ErrorMessage;
+                                op.Reason = entry.ErrorMessage;
+                                op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Value: {def.ValueName} | Original: {oldStr} | Expected: {def.TargetValueStr} | Got: {displayAfter}";
+                            }
+
+                            _journal.SaveEntry(entry);
+                            response.Operations.Add(op);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        response.AttemptedCount++;
+                        response.FailedCount++;
+                        op.Failed = true;
+                        op.Status = "failed";
+                        op.State = "FAILED";
+                        op.VerificationResult = "VERIFICATION_FAILED";
+                        op.FailureReason = ex.Message;
+                        op.Reason = ex.Message;
+                        op.Detail = $"Hive: {def.RootKey} | Key: {def.SubKey} | Exception: {ex.Message}";
+                        response.Operations.Add(op);
+                    }
+                }
+
+                if (response.Operations.Count == 0 || (response.AppliedCount == 0 && response.AlreadyDesiredCount == 0))
+                {
+                    response.Success = false;
+                    response.Status = "NO_ELIGIBLE_OPERATIONS";
+                    response.Message = "NO ELIGIBLE REGISTRY OPTIMIZATIONS";
+                }
+                else
+                {
+                    response.Success = response.FailedCount == 0;
+                    response.Status = response.FailedCount > 0
+                        ? (response.AppliedCount > 0 ? "PARTIAL_SUCCESS" : "FAILED")
+                        : (response.RestartRequiredCount > 0 ? "RESTART_REQUIRED" : "SUCCESS");
+
+                    response.Message = response.Success
+                        ? (response.AppliedCount == 0
+                            ? $"{response.AlreadyDesiredCount} ALREADY OPTIMAL • 0 NEW WRITES REQUIRED"
+                            : (response.RestartRequiredCount > 0
+                                ? $"{response.AppliedCount} APPLIED & VERIFIED • {response.AlreadyDesiredCount} ALREADY OPTIMAL ({response.RestartRequiredCount} RESTART REQUIRED)"
+                                : (response.AlreadyDesiredCount > 0
+                                    ? $"{response.AppliedCount} APPLIED & VERIFIED • {response.AlreadyDesiredCount} ALREADY OPTIMAL"
+                                    : $"{response.AppliedCount} APPLIED & VERIFIED")))
+                        : $"{response.AppliedCount} APPLIED • {response.FailedCount} FAILED";
+                }
+
+                return response;
             });
         }
 

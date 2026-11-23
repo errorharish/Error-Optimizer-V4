@@ -1,4 +1,5 @@
 using BiosOptimizer.Core.Interfaces;
+using BiosOptimizer.IPC.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,6 +11,8 @@ namespace BiosOptimizer.Core.Implementations;
 
 public class ProcessReductionEngine : IProcessReductionEngine
 {
+    [DllImport("psapi.dll")]
+    private static extern int EmptyWorkingSet(IntPtr hwProc);
     private static readonly HashSet<string> SystemCritical = new(StringComparer.OrdinalIgnoreCase)
     {
         "csrss", "wininit", "services", "smss", "lsass", "svchost", "System",
@@ -32,10 +35,10 @@ public class ProcessReductionEngine : IProcessReductionEngine
 
     private static readonly HashSet<string> SafeToKillExact = new(StringComparer.OrdinalIgnoreCase)
     {
-        "OneDrive", "SkypeBackgroundHost", "Spotify", "Teams", "Discord",
-        "Dropbox", "GoogleDrive", "AdobeIPCBroker", "AdobeARM",
+        "OneDrive", "SkypeBackgroundHost", "Teams", "Discord",
+        "Dropbox", "GoogleDrive",
         "GoogleUpdate", "FacebookUpdate", "ApplePushService", "iTunesHelper",
-        "jusched", "EOSServer", "OVRServer_x64", "EpicGamesLauncher", "Steam",
+        "jusched", "EOSServer", "OVRServer_x64", "EpicGamesLauncher",
         "Origin", "upc", "GalaxyClient"
     };
 
@@ -51,6 +54,9 @@ public class ProcessReductionEngine : IProcessReductionEngine
         Console.WriteLine("[PROCESS REDUCTION] Enumerating Windows processes...");
         var candidates = new List<ProcessCandidate>();
         var processes = Process.GetProcesses();
+
+        // Pass 0.5: Native Parent-Child Process Hierarchy Resolution
+        var (_, childParentMap) = BiosOptimizer.Core.V4.Intelligence.ProcessIntelligenceEngine.BuildRealProcessHierarchy();
 
         // Pass 1: Gather active window & foreground PIDs
         var activeWindowPids = GetPidsWithVisibleWindows();
@@ -77,6 +83,14 @@ public class ProcessReductionEngine : IProcessReductionEngine
             };
             
             try { cand.ProcessPath = p.MainModule?.FileName ?? ""; } catch { }
+            if (childParentMap.TryGetValue(p.Id, out var parentInfo))
+            {
+                cand.ParentProcessId = parentInfo.ParentPid;
+                cand.ParentProcessName = parentInfo.ParentName;
+            }
+            var (hasAutoRestart, restartTrigger) = CheckAutoRestartTriggers(cand.ProcessName, cand.ProcessPath);
+            cand.HasAutoRestartPolicy = hasAutoRestart;
+            cand.AutoRestartTrigger = restartTrigger;
             try { cand.RamUsageMb = Math.Round(p.WorkingSet64 / (1024.0 * 1024.0), 1); } catch { cand.RamUsageMb = 0; }
 
             // Extract Publisher and File Description if accessible
@@ -98,7 +112,9 @@ public class ProcessReductionEngine : IProcessReductionEngine
             cand.IsForeground = (p.Id == fgPid);
 
             // Strict Self & Foreground Protection
-            if (p.Id == currentAppPid)
+            if (p.Id == currentAppPid ||
+                p.ProcessName.Contains("ErrorOptimizer", StringComparison.OrdinalIgnoreCase) ||
+                p.ProcessName.Contains("BiosOptimizer", StringComparison.OrdinalIgnoreCase))
             {
                 cand.Category = ProcessCategory.SystemCritical;
                 cand.SafetyLevel = "PROTECTED";
@@ -107,8 +123,23 @@ public class ProcessReductionEngine : IProcessReductionEngine
                 continue;
             }
 
+            // V4 Protected Application Policy (Adobe, Maxon, Red Giant, Topaz, DaVinci, Steam, Lenovo Vantage, UltraViewer, Spotify, Urban VPN)
+            var policyMatch = BiosOptimizer.Core.V4.Safety.ProtectedApplicationPolicy.Instance.EvaluateProcessIdentity(
+                cand.ProcessName,
+                cand.ProcessPath,
+                cand.Publisher,
+                !string.IsNullOrWhiteSpace(cand.Publisher));
+            if (policyMatch.IsProtected)
+            {
+                cand.Category = ProcessCategory.OsRequired;
+                cand.SafetyLevel = "PROTECTED";
+                cand.Reason = policyMatch.Reason;
+                candidates.Add(cand);
+                continue;
+            }
+
             // Category classification
-            cand.Category = ClassifyProcess(cand.ProcessName, cand.ProcessPath);
+            cand.Category = ClassifyProcess(cand.ProcessName, cand.ProcessPath, cand.Publisher);
 
             if (cand.IsForeground)
             {
@@ -162,6 +193,26 @@ public class ProcessReductionEngine : IProcessReductionEngine
             candidates.Add(cand);
         }
 
+        // Pass 1.5: Duplicate background instance detection
+        var dupGroups = candidates
+            .Where(c => !c.HasVisibleWindow && !c.IsForeground && c.Category != ProcessCategory.SystemCritical && c.Category != ProcessCategory.OsRequired)
+            .GroupBy(c => c.ProcessName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1);
+
+        foreach (var group in dupGroups)
+        {
+            int dupCount = group.Count();
+            foreach (var cand in group)
+            {
+                cand.IsDuplicate = true;
+                cand.DuplicateCount = dupCount;
+                if (cand.Category == ProcessCategory.SafeToKill)
+                {
+                    cand.Reason = $"Redundant background process instance ({dupCount} duplicate instances active)";
+                }
+            }
+        }
+
         // Pass 2: CPU check over 1.5 seconds for candidate processes
         var potentialKills = candidates.Where(c => c.Category == ProcessCategory.SafeToKill).Take(30).ToList();
         
@@ -193,40 +244,153 @@ public class ProcessReductionEngine : IProcessReductionEngine
         return candidates;
     }
 
-    public int TerminateProcesses(IEnumerable<int> processIdsToKill)
+    public sealed class ProcessTerminationBatchResult
     {
-        int killed = 0;
+        public int Terminated { get; set; }
+        public int SkippedProtected { get; set; }
+        public int AccessDenied { get; set; }
+        public int ThrottledCount { get; set; }
+        public int ProcessCountBefore { get; set; }
+        public int ProcessCountAfter { get; set; }
+        public double RamFreedMb { get; set; }
+        public int TerminatedCount => Terminated;
+        public int SkippedProtectedCount => SkippedProtected;
+        public List<string> Errors { get; set; } = new();
+    }
+
+    public ProcessTerminationBatchResult TerminateProcessesDetailed(IEnumerable<int> processIdsToKill)
+    {
+        var summary = new ProcessTerminationBatchResult();
         var killedPaths = new List<string>();
         int currentAppPid = Process.GetCurrentProcess().Id;
+        var visibleWindowPids = GetPidsWithVisibleWindows();
+
+        int countBefore = 0;
+        try { countBefore = Process.GetProcesses().Length; } catch { }
+        summary.ProcessCountBefore = countBefore;
+        double totalRamFreedMb = 0.0;
 
         foreach (var pid in processIdsToKill)
         {
-            if (pid <= 4 || pid == currentAppPid) continue;
+            if (pid <= 4 || pid == currentAppPid)
+            {
+                summary.SkippedProtected++;
+                continue;
+            }
 
             try
             {
-                var p = Process.GetProcessById(pid);
-                if (p.HasExited) continue;
+                using var p = Process.GetProcessById(pid);
+                if (p.HasExited)
+                {
+                    summary.SkippedProtected++;
+                    continue;
+                }
 
-                // Re-validate that the PID belongs to an allowed process and not a reused critical system process
+                // Process Identity Integrity & PID reuse guard
+                DateTime startTime = DateTime.MinValue;
+                try { startTime = p.StartTime; } catch { }
+                if (startTime == DateTime.MinValue && p.HasExited)
+                {
+                    summary.SkippedProtected++;
+                    continue;
+                }
+
                 if (SystemCritical.Contains(p.ProcessName) || OsRequired.Contains(p.ProcessName))
                 {
-                    p.Dispose();
-                    continue; // Skip dangerous PID
+                    summary.SkippedProtected++;
+                    continue;
+                }
+
+                // 1. Session 0 isolation — never terminate Session 0 services through process killer
+                if (p.SessionId == 0)
+                {
+                    summary.SkippedProtected++;
+                    summary.Errors.Add($"PID {pid} ({p.ProcessName}): Protected Session 0 system service; skipped.");
+                    continue;
+                }
+
+                // 2. Protect processes with active visible windows
+                if (visibleWindowPids.Contains(pid))
+                {
+                    summary.SkippedProtected++;
+                    summary.Errors.Add($"PID {pid} ({p.ProcessName}): Active visible window present; skipped for user safety.");
+                    continue;
                 }
 
                 var path = "";
                 try { path = p.MainModule?.FileName ?? ""; } catch { }
-                
+
+                // 3. Protected Application & Security Policy Evaluation
+                var policyMatch = BiosOptimizer.Core.V4.Safety.ProtectedApplicationPolicy.Instance.EvaluateProcessIdentity(
+                    p.ProcessName, path);
+                if (policyMatch.IsProtected)
+                {
+                    summary.SkippedProtected++;
+                    continue;
+                }
+
+                // 4. Non-Bypassable SafetyKernel Evaluation
+                var verdict = BiosOptimizer.Core.V4.Safety.SafetyKernel.Instance.EvaluateProcessKill(
+                    new BiosOptimizer.IPC.Contracts.ProcessIdentityDto
+                    {
+                        ProcessId = pid,
+                        ProcessName = p.ProcessName,
+                        ExecutablePath = path
+                    },
+                    isGamingActive: false,
+                    isEditingActive: false,
+                    out string ruleCode,
+                    out string safetyReason);
+
+                if (verdict == SafetyVerdict.Deny)
+                {
+                    summary.SkippedProtected++;
+                    summary.Errors.Add($"PID {pid} ({p.ProcessName}): Blocked by SafetyKernel [{ruleCode}] — {safetyReason}");
+                    continue;
+                }
+
+                double workingSetMb = 0.0;
+                try { workingSetMb = p.WorkingSet64 / (1024.0 * 1024.0); } catch { }
+
+                // 5. Unverified / Unknown processes must NOT default to termination
+                if (!SafeToKillExact.Contains(p.ProcessName))
+                {
+                    try
+                    {
+                        p.PriorityClass = ProcessPriorityClass.Idle;
+                        EmptyWorkingSet(p.Handle);
+                        summary.SkippedProtected++;
+                        summary.ThrottledCount++;
+                        totalRamFreedMb += (workingSetMb * 0.7); // 70% typically released to standby/free
+                        summary.Errors.Add($"PID {pid} ({p.ProcessName}): Not in safe-termination catalog; safely throttled to Idle priority and working set trimmed instead.");
+                    }
+                    catch
+                    {
+                        summary.SkippedProtected++;
+                    }
+                    continue;
+                }
+
                 if (!string.IsNullOrEmpty(path)) killedPaths.Add(path);
 
                 p.Kill();
-                killed++;
-                p.Dispose();
+                totalRamFreedMb += workingSetMb;
+                summary.Terminated++;
             }
-            catch
+            catch (System.ComponentModel.Win32Exception ex)
             {
-                // Access denied or already exited
+                summary.AccessDenied++;
+                summary.Errors.Add($"PID {pid}: {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                summary.AccessDenied++;
+                summary.Errors.Add($"PID {pid}: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                summary.Errors.Add($"PID {pid}: {ex.Message}");
             }
         }
 
@@ -235,27 +399,33 @@ public class ProcessReductionEngine : IProcessReductionEngine
             _backupManager.LogKilledProcesses(killedPaths);
         }
 
-        return killed;
+        int countAfter = 0;
+        try { countAfter = Process.GetProcesses().Length; } catch { }
+        summary.ProcessCountAfter = countAfter;
+        summary.RamFreedMb = Math.Round(totalRamFreedMb, 1);
+
+        return summary;
     }
 
-    private ProcessCategory ClassifyProcess(string name, string path)
+    public int TerminateProcesses(IEnumerable<int> processIdsToKill) =>
+        TerminateProcessesDetailed(processIdsToKill).Terminated;
+
+    private ProcessCategory ClassifyProcess(string name, string path, string publisher = "")
     {
         if (SystemCritical.Contains(name)) return ProcessCategory.SystemCritical;
         if (OsRequired.Contains(name)) return ProcessCategory.OsRequired;
+
+        var policyMatch = BiosOptimizer.Core.V4.Safety.ProtectedApplicationPolicy.Instance.EvaluateProcessIdentity(
+            name, path, publisher, !string.IsNullOrWhiteSpace(publisher));
+        if (policyMatch.IsProtected)
+            return ProcessCategory.OsRequired;
+
         if (Browsers.Contains(name)) return ProcessCategory.Browser;
         
         if (!string.IsNullOrEmpty(path) && path.EndsWith(".sys", StringComparison.OrdinalIgnoreCase))
             return ProcessCategory.SystemCritical;
 
         if (SafeToKillExact.Contains(name)) return ProcessCategory.SafeToKill;
-        
-        if (name.Contains("Update", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Helper", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Tray", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Background", StringComparison.OrdinalIgnoreCase))
-        {
-            return ProcessCategory.SafeToKill;
-        }
 
         return ProcessCategory.Unknown;
     }
@@ -332,4 +502,117 @@ public class ProcessReductionEngine : IProcessReductionEngine
     }
 
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    private static (bool HasAutoRestart, string Trigger) CheckAutoRestartTriggers(string processName, string processPath)
+    {
+        try
+        {
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false))
+            {
+                if (key != null)
+                {
+                    foreach (var valName in key.GetValueNames())
+                    {
+                        var val = key.GetValue(valName)?.ToString() ?? string.Empty;
+                        if (val.Contains(processName, StringComparison.OrdinalIgnoreCase))
+                            return (true, $"Startup Key: HKCU\\Run\\{valName}");
+                    }
+                }
+            }
+
+            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", false))
+            {
+                if (key != null)
+                {
+                    foreach (var valName in key.GetValueNames())
+                    {
+                        var val = key.GetValue(valName)?.ToString() ?? string.Empty;
+                        if (val.Contains(processName, StringComparison.OrdinalIgnoreCase))
+                            return (true, $"Startup Key: HKLM\\Run\\{valName}");
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return (false, string.Empty);
+    }
+
+    private readonly List<SuppressedDaemonRecord> _suppressedDaemons = new();
+    private readonly object _suppressLock = new();
+
+    public class SuppressedDaemonRecord
+    {
+        public int ProcessId { get; set; }
+        public string ProcessName { get; set; } = string.Empty;
+        public string ProcessPath { get; set; } = string.Empty;
+        public ProcessPriorityClass OriginalPriority { get; set; }
+        public string WorkloadContext { get; set; } = string.Empty;
+        public DateTime SuppressedAtUtc { get; set; } = DateTime.UtcNow;
+    }
+
+    public bool SuppressBackgroundDaemonsForWorkload(string workloadName, IEnumerable<string> daemonNames)
+    {
+        lock (_suppressLock)
+        {
+            var targets = new HashSet<string>(daemonNames, StringComparer.OrdinalIgnoreCase);
+            var procs = Process.GetProcesses();
+            int currentPid = Process.GetCurrentProcess().Id;
+
+            foreach (var p in procs)
+            {
+                try
+                {
+                    if (p.Id <= 4 || p.Id == currentPid || p.SessionId == 0) continue;
+                    if (targets.Contains(p.ProcessName))
+                    {
+                        string path = "";
+                        try { path = p.MainModule?.FileName ?? ""; } catch { }
+                        var originalPriority = p.PriorityClass;
+                        if (originalPriority != ProcessPriorityClass.Idle)
+                        {
+                            p.PriorityClass = ProcessPriorityClass.Idle;
+                        }
+                        EmptyWorkingSet(p.Handle);
+
+                        _suppressedDaemons.Add(new SuppressedDaemonRecord
+                        {
+                            ProcessId = p.Id,
+                            ProcessName = p.ProcessName,
+                            ProcessPath = path,
+                            OriginalPriority = originalPriority,
+                            WorkloadContext = workloadName,
+                            SuppressedAtUtc = DateTime.UtcNow
+                        });
+                    }
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            return true;
+        }
+    }
+
+    public int RestoreSuppressedDaemons()
+    {
+        lock (_suppressLock)
+        {
+            int restoredCount = 0;
+            foreach (var record in _suppressedDaemons)
+            {
+                try
+                {
+                    using var p = Process.GetProcessById(record.ProcessId);
+                    if (!p.HasExited && p.ProcessName.Equals(record.ProcessName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        p.PriorityClass = record.OriginalPriority;
+                        restoredCount++;
+                    }
+                }
+                catch { }
+            }
+            _suppressedDaemons.Clear();
+            return restoredCount;
+        }
+    }
 }

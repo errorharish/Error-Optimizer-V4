@@ -31,33 +31,32 @@ public class DnsFlushHandler : IActionHandler
         
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
-                FileName = "ipconfig",
+                FileName = "ipconfig.exe",
                 Arguments = "/flushdns",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true
             });
-            p?.WaitForExit();
-            
+            string output = p?.StandardOutput.ReadToEnd() ?? "";
+            p?.WaitForExit(5000);
+
             if (p?.ExitCode == 0)
             {
-                // simulate verify
-                var verifyValue = targetValue;
-                if (verifyValue == targetValue)
+                return new OptimizationResult
                 {
-                    return new OptimizationResult
-                    {
-                        Status = ResultStatus.Success,
-                        ItemId = "DNS Cache",
-                        DisplayName = "Flush DNS Resolver Cache",
-                        
-                    };
-                }
+                    Status = ResultStatus.Success,
+                    ItemId = "DNS Cache",
+                    DisplayName = "Flushed DNS Resolver Cache",
+                    Message = output.Trim()
+                };
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            return new OptimizationResult { Status = ResultStatus.Failed, ItemId = "DNS Cache", Message = ex.Message };
+        }
 
         return new OptimizationResult
         {
@@ -69,6 +68,6 @@ public class DnsFlushHandler : IActionHandler
 
     public string GetCurrentValueDisplay(OptimizationEntry entry)
     {
-        return "NeedsFlush"; // simulate state for DNS cache
+        return "ActiveCache";
     }
 }

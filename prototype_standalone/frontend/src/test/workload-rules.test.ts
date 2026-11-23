@@ -1,0 +1,193 @@
+import { describe, expect, it } from "vitest";
+import { SimulatedWorkloadBackend, type WorkloadBackend } from "@/lib/eo/workload/backend";
+import { resolveWorkloads, summarizeWorkloads } from "@/lib/eo/workload/optimizer";
+import {
+  addCustomApp, deleteCustomApp, makeCustomApp, parseStoredCustomApps, updateCustomApp, validateCustomApp,
+} from "@/lib/eo/workload/customApps";
+import { InstalledApplicationDiscovery, WorkloadOptimizer, reduceProcessEvent, type MonitorState } from "@/lib/eo/workload/services";
+import type { EligibleApp, ProcessEvent, RunningWorkload, WorkloadCategory } from "@/lib/eo/workload/types";
+
+const run = (pid: number, category: WorkloadCategory, startedAt = pid): RunningWorkload => ({
+  pid, appId: `a${pid}`, name: `App${pid}`, exe: `app${pid}.exe`, category, startedAt, origin: "EXTERNAL", paused: false,
+});
+
+async function inventory() {
+  return new InstalledApplicationDiscovery(new SimulatedWorkloadBackend(0)).scan();
+}
+
+describe("discovery adapter", () => {
+  it("returns eligible apps labelled as sample data in preview", async () => {
+    const apps = await inventory();
+    expect(apps.length).toBeGreaterThanOrEqual(11);
+    expect(apps.every((a) => a.source === "SAMPLE")).toBe(true);
+    expect(apps.find((a) => a.name === "Valorant")?.category).toBe("GAMES");
+  });
+});
+
+describe("process monitor", () => {
+  const start = (pid: number, exe: string, origin: ProcessEvent["origin"] = "EXTERNAL"): ProcessEvent =>
+    ({ type: "process-start", pid, exe, origin, at: 1 });
+
+  it("detects apps launched outside Error Optimizer and launched from it", async () => {
+    const apps = await inventory();
+    let s: MonitorState = { running: [], foregroundPid: null };
+    s = reduceProcessEvent(s, start(100, "VALORANT-Win64-Shipping.exe", "EO_LAUNCH"), apps);
+    s = reduceProcessEvent(s, start(200, "AfterFX.exe"), apps);
+    s = reduceProcessEvent(s, start(300, "HD-Player.exe"), apps);
+    expect(s.running.map((w) => [w.name, w.category, w.origin])).toEqual([
+      ["Valorant", "GAMES", "EO_LAUNCH"],
+      ["After Effects", "CREATIVE", "EXTERNAL"],
+      ["MSI App Player 5", "EMULATORS", "EXTERNAL"],
+    ]);
+  });
+
+  it("ignores non-eligible and critical Windows processes", async () => {
+    const apps = await inventory();
+    let s: MonitorState = { running: [], foregroundPid: null };
+    s = reduceProcessEvent(s, start(1, "notepad.exe"), apps);
+    s = reduceProcessEvent(s, start(2, "explorer.exe"), apps);
+    expect(s.running).toHaveLength(0);
+  });
+
+  it("exiting an app removes it from running workloads", async () => {
+    const apps = await inventory();
+    let s: MonitorState = { running: [], foregroundPid: null };
+    s = reduceProcessEvent(s, start(100, "cs2.exe"), apps);
+    s = reduceProcessEvent(s, { type: "process-exit", pid: 100, at: 2 }, apps);
+    expect(s.running).toHaveLength(0);
+    expect(s.foregroundPid).toBeNull();
+  });
+});
+
+describe("conflict manager", () => {
+  const seven = [run(1, "GAMES"), run(2, "CREATIVE"), run(3, "EMULATORS"), run(4, "VIDEO AI"), run(5, "GAMES"), run(6, "CREATIVE"), run(7, "EMULATORS")];
+
+  it("optimizes 7 simultaneous apps independently with non-overlapping affinity", () => {
+    const r = resolveWorkloads(seven, 1);
+    expect(r.every((w) => w.status === "OPTIMIZED")).toBe(true);
+    const cores = r.flatMap((w) => w.plan.affinity ?? []);
+    expect(new Set(cores).size).toBe(cores.length);
+    expect(cores).not.toContain(0);
+    expect(cores).not.toContain(1);
+  });
+
+  it("flags contention when cores run out", () => {
+    const r = resolveWorkloads(seven, 1);
+    expect(r.some((w) => w.contention)).toBe(true);
+    expect(r.filter((w) => w.plan.affinity === null).length).toBeGreaterThan(0);
+  });
+
+  it("only the foreground app gets High priority, and it follows focus", () => {
+    const list = [run(1, "GAMES"), run(2, "CREATIVE"), run(3, "EMULATORS")];
+    const a = resolveWorkloads(list, 1);
+    expect(a.filter((w) => w.plan.priority === "HIGH").map((w) => w.pid)).toEqual([1]);
+    const b = resolveWorkloads(list, 2);
+    expect(b.filter((w) => w.plan.priority === "HIGH").map((w) => w.pid)).toEqual([2]);
+  });
+
+  it("background apps drop to Normal when more than 4 are active", () => {
+    const r = resolveWorkloads(seven, 1);
+    expect(r.filter((w) => !w.foreground).every((w) => w.plan.priority === "NORMAL")).toBe(true);
+  });
+
+  it("stopping optimization keeps the app listed and releases its cores", () => {
+    const list = [run(1, "GAMES"), { ...run(2, "CREATIVE"), paused: true }];
+    const r = resolveWorkloads(list, 1);
+    expect(r).toHaveLength(2);
+    expect(r[1]!.status).toBe("PAUSED");
+    expect(r[1]!.plan.affinity).toBeNull();
+    expect(summarizeWorkloads(r).optimized).toBe(1);
+  });
+
+  it("stop optimization reverts the plan without terminating the process", async () => {
+    const be = new SimulatedWorkloadBackend(0);
+    const opt = new WorkloadOptimizer(be);
+    const list = [run(1, "GAMES")];
+    await opt.sync(resolveWorkloads(list, 1));
+    expect(be.applied.has(1)).toBe(true);
+    await opt.sync(resolveWorkloads([{ ...list[0]!, paused: true }], 1));
+    expect(be.applied.has(1)).toBe(false);
+  });
+});
+
+describe("custom applications", () => {
+  const base: EligibleApp[] = [];
+  const input = { name: "Unreal Editor", path: "C:\\UE\\UnrealEditor.exe", category: "CREATIVE" as const };
+
+  it("validates name, .exe path, critical processes and duplicates", () => {
+    expect(validateCustomApp({ ...input, name: " " }, base)).toMatch(/name/);
+    expect(validateCustomApp({ ...input, path: "C:\\x\\tool.bat" }, base)).toMatch(/\.exe/);
+    expect(validateCustomApp({ ...input, path: "C:\\Windows\\explorer.exe" }, base)).toMatch(/critical/);
+    const list = addCustomApp(base, makeCustomApp(input, "c1"));
+    expect(validateCustomApp(input, list)).toMatch(/already/);
+    expect(validateCustomApp(input, list, "c1")).toBeNull();
+  });
+
+  it("adds, edits, deletes and survives a reload", () => {
+    let list = addCustomApp(base, makeCustomApp(input, "c1"));
+    list = updateCustomApp(list, "c1", { ...input, name: "UE5", category: "GAMES" });
+    expect(list[0]).toMatchObject({ name: "UE5", category: "GAMES", exe: "UnrealEditor.exe" });
+    const reloaded = parseStoredCustomApps(JSON.parse(JSON.stringify(list)));
+    expect(reloaded).toEqual(list);
+    expect(deleteCustomApp(reloaded, "c1")).toEqual([]);
+  });
+});
+
+import { WorkloadOptimizer as _WO } from "@/lib/eo/workload/services";
+describe("workload exit restores settings", () => {
+  it("reverts only the exited workload's plan and leaves the other applied", async () => {
+    const calls: string[] = [];
+    const be = {
+      applyPlan: async (pid: number) => void calls.push(`apply:${pid}`),
+      revertPlan: async (pid: number) => void calls.push(`revert:${pid}`),
+    } as never;
+    const phases: string[] = [];
+    const o = new _WO(be, (pid, ph) => phases.push(`${pid}:${ph}`));
+    const plan = { priority: "HIGH", affinity: null, memory: "", gpu: "", actions: [], notes: [], risk: "Safe" };
+    const w = (pid: number) => ({ pid, status: "OPTIMIZED", plan }) as never;
+    await o.sync([w(1), w(2)]);
+    await o.sync([w(2)]);
+    expect(calls).toEqual(["apply:1", "apply:2", "revert:1"]);
+    expect(phases).toContain("1:RESTORED");
+    expect(phases).not.toContain("2:RESTORED");
+  });
+});
+
+describe("applied methods and focus", () => {
+  it("reports the methods the backend actually applied", async () => {
+    const be = new SimulatedWorkloadBackend(0);
+    const phases: Array<[number, string, string[] | undefined]> = [];
+    const opt = new WorkloadOptimizer(be, (pid, phase, applied) => phases.push([pid, phase, applied]));
+    const [w] = resolveWorkloads([run(10, "GAMES")], 10);
+    await opt.sync([w!]);
+    const done = phases.find(([, p]) => p === "OPTIMIZED");
+    expect(done?.[2]).toEqual([
+      "CPU priority boost",
+      "Exclusive core affinity",
+      "Background updater throttle",
+      "High timer resolution",
+    ]);
+  });
+
+  it("leaves applied methods unconfirmed when the host does not report them", async () => {
+    const be: WorkloadBackend = new SimulatedWorkloadBackend(0);
+    be.applyPlan = async () => undefined;
+    let applied: string[] | undefined = ["x"];
+    const opt = new WorkloadOptimizer(be, (_pid, phase, a) => {
+      if (phase === "OPTIMIZED") applied = a;
+    });
+    await opt.sync(resolveWorkloads([run(11, "CREATIVE")], 11));
+    expect(applied).toBeUndefined();
+  });
+
+  it("focus moves the foreground to a running app only", async () => {
+    const be = new SimulatedWorkloadBackend(0);
+    const events: ProcessEvent[] = [];
+    be.subscribe((e) => events.push(e));
+    const { pid } = await be.launch({ id: "a", name: "A", exe: "a.exe", path: "C:\\a.exe", category: "GAMES", source: "SAMPLE" });
+    await be.focus(pid);
+    await be.focus(999999);
+    const fg = events.filter((e) => e.type === "foreground-change");
+    expect(fg.map((e) => e.pid)).toEqual([pid]);
+  });
+});

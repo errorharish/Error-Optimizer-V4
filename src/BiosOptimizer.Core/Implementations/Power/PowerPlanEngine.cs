@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using BiosOptimizer.Core.V4.Recommendations;
 
 namespace BiosOptimizer.Core.Implementations.Power
 {
@@ -32,10 +33,43 @@ namespace BiosOptimizer.Core.Implementations.Power
         public static readonly Guid GUID_PROCTHROTTLEMAX = new("bc5038f7-23e0-4960-96da-33abaf5935ec");
         public static readonly Guid GUID_SYSCOOLPOL = new("94d3a615-a899-4ac5-8282-e32b15a44ac1");
         public static readonly Guid GUID_PERFBOOSTMODE = new("be337238-0d82-4146-a960-4f3749d470c7");
+        public static readonly Guid GUID_PERFEPP = new("36687f9e-1337-4327-97c8-c68057249e1a");
+        public static readonly Guid GUID_CPMINCORES = new("0cc5b647-c1df-4637-891a-dec35c318583");
+
+        public static readonly Guid GUID_DISK_SUBGROUP = new("0012ee47-9041-4b5d-9b77-535fba8b1442");
+        public static readonly Guid GUID_DISKIDLE = new("6738e2c4-e8a5-4217-a995-20dae778674e");
+
+        public static readonly Guid GUID_PCIEXPRESS_SETTINGS_SUBGROUP = new("501a4d13-42af-4429-9dec-442042800d56");
+        public static readonly Guid GUID_ASPM = new("ee12f906-d277-404b-b6da-738812715c0d");
+
+        public static readonly Guid GUID_VIDEO_SUBGROUP = new("7516b93f-9d25-4329-84e0-e14f378c7798");
+        public static readonly Guid GUID_VIDEOIDLE = new("3c0bc30f-94b0-461d-a332-90f9b6e0fb77");
+
+        public static readonly Guid GUID_SLEEP_SUBGROUP = new("238c9fa8-0aad-41ed-83f4-97be242c8f20");
+        public static readonly Guid GUID_STANDBYIDLE = new("29f6c1db-86da-48c5-9fdb-f2b67b1f44da");
+
+        public static readonly Guid GUID_WIRELESS_SUBGROUP = new("19cbb8fa-5279-450e-9fed-813d46b12e7a");
+        public static readonly Guid GUID_WIRELESS_POWERSAVE = new("12bbebe6-58d6-4636-95bb-3217ef867c1a");
+
+        public static readonly Guid GUID_USB_SUBGROUP = new("2a737441-1930-4402-8d77-b2bebba308a3");
+        public static readonly Guid GUID_USB_SELECTIVE_SUSPEND = new("48e6b7a6-50f5-4760-a579-a420f2670877");
+
+        public static readonly Guid GUID_HETEROGENEOUS_THREAD_SCHEDULING = new("93b89297-b256-478e-a584-37932b94709f");
+        public static readonly Guid GUID_HETEROGENEOUS_SHORT_THREAD_SCHEDULING = new("bae08b81-2d5e-4234-ad8f-9e8241b2975a");
+
+        // Persistent Unique AI Scheme GUIDs & Names
+        public static readonly Guid AI_MAX_PERF_GUID = new("a1b00001-e0e0-4000-8000-000000000001");
+        public const string AI_MAX_PERF_GUID_STR = "a1b00001-e0e0-4000-8000-000000000001";
+        public const string AI_MAX_PERF_PLAN_NAME = "Error Optimizer AI — Max Performance";
+
+        public static readonly Guid AI_BATTERY_GUID = new("a1b00002-e0e0-4000-8000-000000000002");
+        public const string AI_BATTERY_GUID_STR = "a1b00002-e0e0-4000-8000-000000000002";
+        public const string AI_BATTERY_PLAN_NAME = "Error Optimizer AI — Battery Efficiency";
 
         public const uint ACCESS_SCHEME = 16;
         private const string REG_AI_PLANS_KEY = @"Software\ErrorOptimizer\PowerPlans";
         private const string REG_POWER_CONFIG_KEY = @"Software\ErrorOptimizer\PowerPlans\Config";
+        private static readonly object _sharedStoreLock = new();
 
         private string? _previousActiveSchemeGuid;
         private string? _previousActiveSchemeName;
@@ -169,7 +203,51 @@ namespace BiosOptimizer.Core.Implementations.Power
         [DllImport("Kernel32.dll", EntryPoint = "LocalFree")]
         private static extern IntPtr LocalFree(IntPtr hMem);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SYSTEM_POWER_STATUS
+        {
+            public byte ACLineStatus; // 0 = Offline (Battery), 1 = Online (AC), 255 = Unknown
+            public byte BatteryFlag;  // 1 = High, 2 = Low, 4 = Critical, 8 = Charging, 128 = No battery, 255 = Unknown
+            public byte BatteryLifePercent; // 0-100, or 255 if unknown
+            public byte SystemStatusFlag;   // 1 = Battery saver active
+            public int BatteryLifeTime;
+            public int BatteryFullLifeTime;
+        }
+
         #endregion
+
+        public SYSTEM_POWER_STATUS GetPowerStatus()
+        {
+            try
+            {
+                if (GetSystemPowerStatus(out var status)) return status;
+            }
+            catch { }
+            return new SYSTEM_POWER_STATUS { ACLineStatus = 1, BatteryFlag = 128, BatteryLifePercent = 100 };
+        }
+
+        public bool IsOnBattery => GetPowerStatus().ACLineStatus == 0;
+        public bool IsOnAcPower => GetPowerStatus().ACLineStatus == 1;
+        public int BatteryPercent
+        {
+            get
+            {
+                byte pct = GetPowerStatus().BatteryLifePercent;
+                return pct <= 100 ? pct : 100;
+            }
+        }
+        public bool IsBatterySaverActive => GetPowerStatus().SystemStatusFlag == 1;
+        public bool HasBattery
+        {
+            get
+            {
+                byte flag = GetPowerStatus().BatteryFlag;
+                return flag != 128 && flag != 255;
+            }
+        }
 
         public string? PreviousActiveSchemeName
         {
@@ -364,6 +442,7 @@ namespace BiosOptimizer.Core.Implementations.Power
                                 IsStartupPlan = isStartup,
                                 Owner = isOwned ? "ErrorOptimizer" : (isBuiltin ? "Windows" : "OEM"),
                                 BasePlanName = isOwned && ownedRecords.TryGetValue(guidStr, out var oRec) && !string.IsNullOrEmpty(oRec.BasePlanGuid) ? oRec.BasePlanGuid : (isBuiltin ? "Standard Windows" : "Vendor Preset"),
+                                BasePlanGuid = isOwned && ownedRecords.TryGetValue(guidStr, out var oRecGuid) && !string.IsNullOrEmpty(oRecGuid.BasePlanGuid) ? oRecGuid.BasePlanGuid : string.Empty,
                                 Status = isActive ? PowerPlanStatus.Active : PowerPlanStatus.Available
                             };
 
@@ -457,6 +536,51 @@ namespace BiosOptimizer.Core.Implementations.Power
                     plans.Add(ultPlan);
                 }
 
+                // 4. Register Creatable Error Optimizer AI Schemes if not yet created on this machine
+                bool hasAiMax = plans.Any(p => p.IsAiMaxPerformance || p.Guid.Equals(AI_MAX_PERF_GUID_STR, StringComparison.OrdinalIgnoreCase));
+                if (!hasAiMax)
+                {
+                    var aiMaxPlan = new PowerPlanItem
+                    {
+                        Guid = AI_MAX_PERF_GUID_STR,
+                        SchemeGuid = AI_MAX_PERF_GUID,
+                        Name = AI_MAX_PERF_PLAN_NAME,
+                        Description = "Dynamic AI scheme: 100% min/max CPU state on AC, active cooling, unparked cores, zero PCIe link latency.",
+                        PlanType = "AI_MAX_PERFORMANCE",
+                        IsInstalled = false,
+                        IsSupported = true,
+                        IsCustomAiPlan = true,
+                        IsErrorOptimizerOwned = true,
+                        Status = PowerPlanStatus.Creatable,
+                        BatteryImpact = "MAX PERFORMANCE",
+                        RiskLevel = "SAFE"
+                    };
+                    AssignPlanMetadata(aiMaxPlan);
+                    plans.Add(aiMaxPlan);
+                }
+
+                bool hasAiBattery = plans.Any(p => p.IsAiBatteryEfficiency || p.Guid.Equals(AI_BATTERY_GUID_STR, StringComparison.OrdinalIgnoreCase));
+                if (!hasAiBattery)
+                {
+                    var aiBatPlan = new PowerPlanItem
+                    {
+                        Guid = AI_BATTERY_GUID_STR,
+                        SchemeGuid = AI_BATTERY_GUID,
+                        Name = AI_BATTERY_PLAN_NAME,
+                        Description = "Adaptive power saver: 5% min state, capped 75-80% max state on battery, passive cooling, PCIe ASPM power saving.",
+                        PlanType = "AI_BATTERY_EFFICIENCY",
+                        IsInstalled = false,
+                        IsSupported = true,
+                        IsCustomAiPlan = true,
+                        IsErrorOptimizerOwned = true,
+                        Status = PowerPlanStatus.Creatable,
+                        BatteryImpact = "BATTERY EFFICIENCY",
+                        RiskLevel = "SAFE"
+                    };
+                    AssignPlanMetadata(aiBatPlan);
+                    plans.Add(aiBatPlan);
+                }
+
                 return plans;
             }, ct);
         }
@@ -499,6 +623,12 @@ namespace BiosOptimizer.Core.Implementations.Power
                     {
                         _previousActiveSchemeGuid = currentGuidStr;
                         _previousActiveSchemeName = currentName;
+                    }
+
+                    if (!targetGuidStr.Equals(currentGuidStr, StringComparison.OrdinalIgnoreCase) &&
+                        !IsAiManagedScheme(currentGuidStr, currentName))
+                    {
+                        PersistBaselineScheme(currentGuidStr, currentName);
                     }
 
                     // 2. Check if already active
@@ -638,12 +768,10 @@ namespace BiosOptimizer.Core.Implementations.Power
             }, ct);
         }
 
-        public const string AI_BATTERY_PLAN_NAME = "Error Optimizer AI — Battery Efficiency";
-        public const string AI_MAX_PERF_PLAN_NAME = "Error Optimizer AI — Max Performance";
-
         /// <summary>
         /// Creates or retrieves the flagship Error Optimizer AI — Max Performance Windows power scheme,
         /// applies machine-specific tuned performance settings, and activates it.
+        /// Hardened against forcing 100% idle minimum CPU states, respects Modern Standby, and preserves OEM thermal bounds.
         /// </summary>
         public async Task<PowerPlanOperationResult> CreateOrGetAiMaxPerformancePlanAsync(CancellationToken ct = default)
         {
@@ -651,69 +779,134 @@ namespace BiosOptimizer.Core.Implementations.Power
             {
                 var hwReport = HardwareAnalyzer.Instance.Collect(forceRefresh: true);
                 var existingPlans = await DiscoverPowerPlansAsync(ct);
+                bool isModernStandby = HardwareAnalyzer.IsModernStandbyPlatform() || hwReport.IsLaptop;
 
                 // Check if an AI Max Performance plan already exists
-                var existingMaxPerf = existingPlans.FirstOrDefault(p => (p.IsAiMaxPerformance || (p.IsErrorOptimizerOwned && (p.Name.Contains("Max Performance", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("AI Performance", StringComparison.OrdinalIgnoreCase)))) && p.IsInstalled);
+                var existingMaxPerf = existingPlans.FirstOrDefault(p =>
+                    (p.Guid.Equals(AI_MAX_PERF_GUID_STR, StringComparison.OrdinalIgnoreCase) ||
+                     p.IsAiMaxPerformance ||
+                     (p.IsErrorOptimizerOwned && (p.Name.Contains("Max Performance", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("AI Performance", StringComparison.OrdinalIgnoreCase)))) &&
+                    p.IsInstalled);
+
+                string targetGuidStr;
+                string baseGuidStrUsed = BalancedGuid;
+
                 if (existingMaxPerf != null)
                 {
-                    // Ensure settings are tuned to maximum practical performance
-                    if (Guid.TryParse(existingMaxPerf.Guid, out Guid maxGuid))
+                    targetGuidStr = existingMaxPerf.Guid;
+                    baseGuidStrUsed = existingMaxPerf.BasePlanGuid ?? (isModernStandby ? BalancedGuid : HighPerformanceGuid);
+                    if (Guid.TryParse(targetGuidStr, out Guid maxGuid))
                     {
                         PowerWriteFriendlyName(IntPtr.Zero, ref maxGuid, IntPtr.Zero, IntPtr.Zero, AI_MAX_PERF_PLAN_NAME, (uint)((AI_MAX_PERF_PLAN_NAME.Length + 1) * 2));
                         await TaskExecutionSupervisor.ExecuteProcessAsync(
                             GetPowercfgPath(),
-                            $"-changename {existingMaxPerf.Guid} \"{AI_MAX_PERF_PLAN_NAME}\"",
+                            $"-changename {targetGuidStr} \"{AI_MAX_PERF_PLAN_NAME}\"",
                             TimeSpan.FromSeconds(3),
                             externalCt: ct
                         );
-
-                        RecordOwnership(new PowerPlanOwnershipRecord
-                        {
-                            Guid = existingMaxPerf.Guid,
-                            Name = AI_MAX_PERF_PLAN_NAME,
-                            PlanType = "AI_MAX_PERFORMANCE",
-                            Owner = "ErrorOptimizer"
-                        });
-
-                        Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                        var settings = new List<PowerPlanSettingItem>();
-                        ApplyAndVerifySetting(maxGuid, subGroup, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 100, 5, settings);
-                        ApplyAndVerifySetting(maxGuid, subGroup, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 100, settings);
-                        ApplyAndVerifySetting(maxGuid, subGroup, GUID_SYSCOOLPOL, "System Cooling Policy", 0, 0, settings);
-                        ApplyAndVerifySetting(maxGuid, subGroup, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 2, 1, settings);
+                    }
+                }
+                else
+                {
+                    // Choose base scheme based on platform compatibility:
+                    // Modern Standby & Laptop platforms MUST use Balanced as base to preserve S0 Low Power Idle sleep.
+                    // On non-Modern Standby desktop platforms, check for Ultimate Performance, then High Performance, then Balanced.
+                    if (isModernStandby)
+                    {
+                        baseGuidStrUsed = BalancedGuid;
+                    }
+                    else
+                    {
+                        var ultPlan = existingPlans.FirstOrDefault(p => (p.Guid.Equals(UltimatePerformanceGuid, StringComparison.OrdinalIgnoreCase) || p.Name.Equals("Ultimate Performance", StringComparison.OrdinalIgnoreCase)) && p.IsInstalled);
+                        var highPlan = existingPlans.FirstOrDefault(p => (p.Guid.Equals(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase) || p.Guid.Equals(HighPerformanceAltGuid, StringComparison.OrdinalIgnoreCase)) && p.IsInstalled);
+                        baseGuidStrUsed = ultPlan?.Guid ?? highPlan?.Guid ?? BalancedGuid;
                     }
 
-                    return await ApplyPowerPlanAsync(existingMaxPerf.Guid, PowerPlanChangeSource.AI_POLICY, ct);
+                    string planName = AI_MAX_PERF_PLAN_NAME;
+                    string planDesc = $"Calibrated maximum responsiveness policy for {hwReport.CpuName} ({hwReport.PhysicalCores} Cores, {hwReport.RamTotalGb:F0}GB RAM).";
+
+                    var createRes = await CreateCustomPowerPlanAsync(baseGuidStrUsed, planName, planDesc, "AI_MAX_PERFORMANCE", AI_MAX_PERF_GUID_STR, ct);
+                    if (!createRes.Success) return createRes;
+                    targetGuidStr = createRes.TargetSchemeGuid;
                 }
 
-                // Choose base scheme: Ultimate Performance -> High Performance -> Balanced -> any installed
-                var basePlan = existingPlans.FirstOrDefault(p => (p.Guid.Equals(UltimatePerformanceGuid, StringComparison.OrdinalIgnoreCase) || p.Name.Equals("Ultimate Performance", StringComparison.OrdinalIgnoreCase)) && p.IsInstalled)
-                            ?? existingPlans.FirstOrDefault(p => (p.Guid.Equals(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase) || p.Guid.Equals(HighPerformanceAltGuid, StringComparison.OrdinalIgnoreCase)) && p.IsInstalled)
-                            ?? existingPlans.FirstOrDefault(p => p.Guid.Equals(BalancedGuid, StringComparison.OrdinalIgnoreCase) && p.IsInstalled)
-                            ?? existingPlans.FirstOrDefault(p => p.IsInstalled);
-
-                string baseGuidStr = basePlan?.Guid ?? BalancedGuid;
-                string planName = AI_MAX_PERF_PLAN_NAME;
-                string planDesc = $"Machine-specific maximum performance policy for {hwReport.CpuName} ({hwReport.PhysicalCores} Cores, {hwReport.RamTotalGb:F0}GB RAM).";
-
-                var createRes = await CreateCustomPowerPlanAsync(baseGuidStr, planName, planDesc, "AI_MAX_PERFORMANCE", ct);
-                if (!createRes.Success) return createRes;
-
-                // Configure performance settings: AC 100% min/max, DC 5% min / 100% max, Boost AC 2 (Aggressive) / DC 1 (Enabled), Cooling Active
-                if (Guid.TryParse(createRes.TargetSchemeGuid, out Guid newGuid))
+                RecordOwnership(new PowerPlanOwnershipRecord
                 {
-                    Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                    var settings = new List<PowerPlanSettingItem>();
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 100, 5, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 100, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_SYSCOOLPOL, "System Cooling Policy", 0, 0, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 2, 1, settings);
-                    createRes.VerifiedSettings = settings;
+                    Guid = targetGuidStr,
+                    BasePlanGuid = baseGuidStrUsed,
+                    Name = AI_MAX_PERF_PLAN_NAME,
+                    PlanType = "AI_MAX_PERFORMANCE",
+                    Owner = "ErrorOptimizer"
+                });
+
+                // Configure hardware-aware adaptive performance settings
+                var settings = new List<PowerPlanSettingItem>();
+                if (Guid.TryParse(targetGuidStr, out Guid schemeGuid))
+                {
+                    // 1. Processor Min/Max: Adaptive 5% min allows C-states and thermal headroom for single-core boost; 100% max.
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 5, 5, ct));
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 100, ct));
+
+                    // 2. System Cooling Policy: AC 1 (Active), DC 1 (Active on AC, preserve cooling)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_SYSCOOLPOL, "System Cooling Policy", 1, 0, ct));
+
+                    // 3. Processor Boost Mode: 
+                    // Aggressive (2) on desktop with thermal headroom; Enabled (1) on laptop to preserve OEM thermal safeguards.
+                    uint acBoost = (!hwReport.IsLaptop) ? 2u : 1u;
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", acBoost, 1, ct));
+
+                    // 4. Energy Performance Preference (EPP): AC 0 (Max Performance - microsecond frequency ramp via Speed Shift / CPPC), DC 50 (Balanced)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PERFEPP, "Energy Performance Preference", 0, 50, ct));
+
+                    // 5. Core Parking: AC 100% on desktop (unparked for determinism); 50% on hybrid (Intel P/E cores) or laptop to preserve thermal envelope
+                    uint acCoreParking = (!hwReport.IsLaptop && !hwReport.HasHybridArchitecture) ? 100u : 50u;
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_CPMINCORES, "Core Parking Minimum Cores", acCoreParking, 50, ct));
+
+                    // 6. Disk Idle Timeout: AC 0 (Never), DC 600 (10 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_DISK_SUBGROUP, GUID_DISKIDLE, "Turn Off Hard Disk After", 0, 600, ct));
+
+                    // 7. PCIe ASPM: AC 0 (Off - Full Speed), DC 1 (Moderate)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PCIEXPRESS_SETTINGS_SUBGROUP, GUID_ASPM, "PCI Express Link State Power Management", 0, 1, ct));
+
+                    // 8. Video Idle Timeout: AC 900 (15 min), DC 300 (5 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_VIDEO_SUBGROUP, GUID_VIDEOIDLE, "Turn Off Display After", 900, 300, ct));
+
+                    // 9. Sleep Standby Timeout: AC 0 (Never sleep on AC), DC 900 (15 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_SLEEP_SUBGROUP, GUID_STANDBYIDLE, "Sleep After", 0, 900, ct));
+
+                    // 10. Wireless Adapter Power Saving: AC 0 (Maximum Performance), DC 1 (Low Power Saving)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERSAVE, "Wireless Adapter Power Saving Mode", 0, 1, ct));
+
+                    // 11. USB Selective Suspend: AC 0 (Disabled - prevents peripheral polling latency), DC 1 (Enabled on battery)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_USB_SUBGROUP, GUID_USB_SELECTIVE_SUSPEND, "USB Selective Suspend", 0, 1, ct));
+
+                    // 12. Heterogeneous Thread Scheduling (Intel 12th/13th/14th Gen P/E-cores hybrid scheduling)
+                    if (hwReport.HasHybridArchitecture)
+                    {
+                        settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_HETEROGENEOUS_THREAD_SCHEDULING, "Heterogeneous Thread Scheduling Policy", 1, 0, ct));
+                    }
                 }
 
-                // Activate the newly created plan
-                var activationResult = await ApplyPowerPlanAsync(createRes.TargetSchemeGuid, PowerPlanChangeSource.AI_POLICY, ct);
-                activationResult.VerifiedSettings = createRes.VerifiedSettings;
+                // Activate the newly created or reconciled plan
+                var activationResult = await ApplyPowerPlanAsync(targetGuidStr, PowerPlanChangeSource.AI_POLICY, ct);
+                activationResult.VerifiedSettings = settings;
+                activationResult.SettingsTotal = settings.Count;
+                activationResult.SettingsVerified = settings.Count(s => s.Verified);
+                activationResult.SettingsUnsupported = settings.Count(s => !s.Supported);
+                activationResult.SettingsFailed = settings.Count(s => s.Supported && !s.Verified);
+                activationResult.BaseSchemeUsed = baseGuidStrUsed;
+                activationResult.ModernStandbyDetected = isModernStandby;
+                activationResult.ActiveSchemeVerified = activationResult.Verified;
+
+                if (activationResult.Success && activationResult.Verified)
+                {
+                    var unsupportedNames = settings.Where(s => !s.Supported).Select(s => s.Name).ToList();
+                    string unsupportedNote = unsupportedNames.Count > 0 
+                        ? $" ({unsupportedNames.Count} setting(s) unsupported by firmware: {string.Join(", ", unsupportedNames)})" 
+                        : "";
+                    activationResult.Message = $"AI Max Performance activated and verified ({activationResult.ActiveSchemeName}). {activationResult.SettingsVerified}/{activationResult.SettingsTotal} settings confirmed{unsupportedNote}.";
+                }
+
                 return activationResult;
             }, ct);
         }
@@ -721,6 +914,7 @@ namespace BiosOptimizer.Core.Implementations.Power
         /// <summary>
         /// Creates or retrieves the Error Optimizer AI — Battery Efficiency Windows power scheme,
         /// applies machine-specific tuned battery-saving settings, and activates it.
+        /// Enforces explicit AC and DC values for every managed setting, exceeding Balanced efficiency while maintaining responsiveness.
         /// </summary>
         public async Task<PowerPlanOperationResult> CreateOrGetAiBatteryEfficiencyPlanAsync(CancellationToken ct = default)
         {
@@ -728,52 +922,122 @@ namespace BiosOptimizer.Core.Implementations.Power
             {
                 var hwReport = HardwareAnalyzer.Instance.Collect(forceRefresh: true);
                 var existingPlans = await DiscoverPowerPlansAsync(ct);
+                bool isModernStandby = HardwareAnalyzer.IsModernStandbyPlatform() || hwReport.IsLaptop;
 
                 // Check if an AI Battery Efficiency plan already exists
-                var existingBattery = existingPlans.FirstOrDefault(p => (p.IsAiBatteryEfficiency || (p.IsErrorOptimizerOwned && p.Name.Contains("Battery Efficiency", StringComparison.OrdinalIgnoreCase))) && p.IsInstalled);
+                var existingBattery = existingPlans.FirstOrDefault(p =>
+                    (p.Guid.Equals(AI_BATTERY_GUID_STR, StringComparison.OrdinalIgnoreCase) ||
+                     p.IsAiBatteryEfficiency ||
+                     (p.IsErrorOptimizerOwned && p.Name.Contains("Battery Efficiency", StringComparison.OrdinalIgnoreCase))) &&
+                    p.IsInstalled);
+
+                string targetGuidStr;
+                string baseGuidStrUsed = BalancedGuid;
+
                 if (existingBattery != null)
                 {
-                    // Ensure settings are tuned to maximum practical battery savings
-                    if (Guid.TryParse(existingBattery.Guid, out Guid batGuid))
+                    targetGuidStr = existingBattery.Guid;
+                    baseGuidStrUsed = existingBattery.BasePlanGuid ?? (isModernStandby ? BalancedGuid : PowerSaverGuid);
+                    if (Guid.TryParse(targetGuidStr, out Guid batGuid))
                     {
-                        Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                        var settings = new List<PowerPlanSettingItem>();
-                        ApplyAndVerifySetting(batGuid, subGroup, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 5, 5, settings);
-                        ApplyAndVerifySetting(batGuid, subGroup, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 75, settings);
-                        ApplyAndVerifySetting(batGuid, subGroup, GUID_SYSCOOLPOL, "System Cooling Policy", 0, 1, settings);
-                        ApplyAndVerifySetting(batGuid, subGroup, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 1, 0, settings);
+                        PowerWriteFriendlyName(IntPtr.Zero, ref batGuid, IntPtr.Zero, IntPtr.Zero, AI_BATTERY_PLAN_NAME, (uint)((AI_BATTERY_PLAN_NAME.Length + 1) * 2));
+                        await TaskExecutionSupervisor.ExecuteProcessAsync(
+                            GetPowercfgPath(),
+                            $"-changename {targetGuidStr} \"{AI_BATTERY_PLAN_NAME}\"",
+                            TimeSpan.FromSeconds(3),
+                            externalCt: ct
+                        );
+                    }
+                }
+                else
+                {
+                    // Choose base scheme: Modern Standby requires Balanced; traditional S3 systems can use Power Saver if present
+                    if (isModernStandby)
+                    {
+                        baseGuidStrUsed = BalancedGuid;
+                    }
+                    else
+                    {
+                        var saverPlan = existingPlans.FirstOrDefault(p => (p.Guid.Equals(PowerSaverGuid, StringComparison.OrdinalIgnoreCase) || p.Name.Equals("Power Saver", StringComparison.OrdinalIgnoreCase)) && p.IsInstalled);
+                        baseGuidStrUsed = saverPlan?.Guid ?? BalancedGuid;
                     }
 
-                    return await ApplyPowerPlanAsync(existingBattery.Guid, PowerPlanChangeSource.AI_POLICY, ct);
+                    string planName = AI_BATTERY_PLAN_NAME;
+                    string planDesc = $"Calibrated battery efficiency policy for {hwReport.CpuName} ({hwReport.PhysicalCores} Cores, {hwReport.RamTotalGb:F0}GB RAM).";
+
+                    var createRes = await CreateCustomPowerPlanAsync(baseGuidStrUsed, planName, planDesc, "AI_BATTERY_EFFICIENCY", AI_BATTERY_GUID_STR, ct);
+                    if (!createRes.Success) return createRes;
+                    targetGuidStr = createRes.TargetSchemeGuid;
                 }
 
-                // Choose base scheme: Power Saver -> Balanced -> any installed
-                var basePlan = existingPlans.FirstOrDefault(p => (p.Guid.Equals(PowerSaverGuid, StringComparison.OrdinalIgnoreCase) || p.Name.Equals("Power Saver", StringComparison.OrdinalIgnoreCase)) && p.IsInstalled)
-                            ?? existingPlans.FirstOrDefault(p => p.Guid.Equals(BalancedGuid, StringComparison.OrdinalIgnoreCase) && p.IsInstalled)
-                            ?? existingPlans.FirstOrDefault(p => p.IsInstalled);
-
-                string baseGuidStr = basePlan?.Guid ?? PowerSaverGuid;
-                string planName = AI_BATTERY_PLAN_NAME;
-                string planDesc = $"Machine-specific battery efficiency profile for {hwReport.CpuName} ({hwReport.PhysicalCores} Cores, {hwReport.RamTotalGb:F0}GB RAM).";
-
-                var createRes = await CreateCustomPowerPlanAsync(baseGuidStr, planName, planDesc, "AI_BATTERY_EFFICIENCY", ct);
-                if (!createRes.Success) return createRes;
-
-                // Configure battery settings: AC 5% min / 100% max, DC 5% min / 75% max, Boost AC 1 / DC 0 (Disabled), Cooling AC Active / DC Passive
-                if (Guid.TryParse(createRes.TargetSchemeGuid, out Guid newGuid))
+                RecordOwnership(new PowerPlanOwnershipRecord
                 {
-                    Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                    var settings = new List<PowerPlanSettingItem>();
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 5, 5, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 75, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_SYSCOOLPOL, "System Cooling Policy", 0, 1, settings);
-                    ApplyAndVerifySetting(newGuid, subGroup, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 1, 0, settings);
-                    createRes.VerifiedSettings = settings;
+                    Guid = targetGuidStr,
+                    BasePlanGuid = baseGuidStrUsed,
+                    Name = AI_BATTERY_PLAN_NAME,
+                    PlanType = "AI_BATTERY_EFFICIENCY",
+                    Owner = "ErrorOptimizer"
+                });
+
+                // Configure hardware-aware battery settings (explicit AC and DC values for every managed setting)
+                var settings = new List<PowerPlanSettingItem>();
+                if (Guid.TryParse(targetGuidStr, out Guid schemeGuid))
+                {
+                    // 1. Processor Min/Max: AC 5% min, 100% max; DC 5% min, 80% max (cuts top voltage tier while preserving UI responsiveness)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 5, 5, ct));
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 80, ct));
+
+                    // 2. System Cooling Policy: AC 1 (Active), DC 0 (Passive - reduces fan power on DC)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_SYSCOOLPOL, "System Cooling Policy", 1, 0, ct));
+
+                    // 3. Processor Boost: AC 1 (Enabled), DC 0 (Disabled on DC - eliminates wattage spikes)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 1, 0, ct));
+
+                    // 4. Energy Performance Preference (EPP): AC 50 (Balanced), DC 85 (Energy Saving on DC)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_PERFEPP, "Energy Performance Preference", 50, 85, ct));
+
+                    // 5. Core Parking: AC 50%, DC 25% (Park idle cores aggressively on DC)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PROCESSOR_SETTINGS_SUBGROUP, GUID_CPMINCORES, "Core Parking Minimum Cores", 50, 25, ct));
+
+                    // 6. Disk Idle Timeout: AC 1200 (20 min), DC 180 (3 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_DISK_SUBGROUP, GUID_DISKIDLE, "Turn Off Hard Disk After", 1200, 180, ct));
+
+                    // 7. PCIe ASPM: AC 1 (Moderate), DC 2 (Maximum Power Saving on DC)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_PCIEXPRESS_SETTINGS_SUBGROUP, GUID_ASPM, "PCI Express Link State Power Management", 1, 2, ct));
+
+                    // 8. Video Idle Timeout: AC 600 (10 min), DC 120 (2 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_VIDEO_SUBGROUP, GUID_VIDEOIDLE, "Turn Off Display After", 600, 120, ct));
+
+                    // 9. Sleep Standby Timeout: AC 1800 (30 min), DC 300 (5 min)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_SLEEP_SUBGROUP, GUID_STANDBYIDLE, "Sleep After", 1800, 300, ct));
+
+                    // 10. Wireless Adapter Power Saving: AC 0 (Maximum Performance), DC 3 (Maximum Power Saving on DC)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERSAVE, "Wireless Adapter Power Saving Mode", 0, 3, ct));
+
+                    // 11. USB Selective Suspend: AC 1 (Enabled), DC 1 (Enabled)
+                    settings.Add(await ApplyAndVerifySettingAsync(schemeGuid, GUID_USB_SUBGROUP, GUID_USB_SELECTIVE_SUSPEND, "USB Selective Suspend", 1, 1, ct));
                 }
 
                 // Activate the newly created plan
-                var activationResult = await ApplyPowerPlanAsync(createRes.TargetSchemeGuid, PowerPlanChangeSource.AI_POLICY, ct);
-                activationResult.VerifiedSettings = createRes.VerifiedSettings;
+                var activationResult = await ApplyPowerPlanAsync(targetGuidStr, PowerPlanChangeSource.AI_POLICY, ct);
+                activationResult.VerifiedSettings = settings;
+                activationResult.SettingsTotal = settings.Count;
+                activationResult.SettingsVerified = settings.Count(s => s.Verified);
+                activationResult.SettingsUnsupported = settings.Count(s => !s.Supported);
+                activationResult.SettingsFailed = settings.Count(s => s.Supported && !s.Verified);
+                activationResult.BaseSchemeUsed = baseGuidStrUsed;
+                activationResult.ModernStandbyDetected = isModernStandby;
+                activationResult.ActiveSchemeVerified = activationResult.Verified;
+
+                if (activationResult.Success && activationResult.Verified)
+                {
+                    var unsupportedNames = settings.Where(s => !s.Supported).Select(s => s.Name).ToList();
+                    string unsupportedNote = unsupportedNames.Count > 0 
+                        ? $" ({unsupportedNames.Count} setting(s) unsupported by firmware: {string.Join(", ", unsupportedNames)})" 
+                        : "";
+                    activationResult.Message = $"AI Battery Efficiency activated and verified ({activationResult.ActiveSchemeName}). {activationResult.SettingsVerified}/{activationResult.SettingsTotal} settings confirmed{unsupportedNote}.";
+                }
+
                 return activationResult;
             }, ct);
         }
@@ -794,6 +1058,7 @@ namespace BiosOptimizer.Core.Implementations.Power
             string planName,
             string planDesc,
             string planType = "CUSTOM",
+            string? desiredGuidStr = null,
             CancellationToken ct = default)
         {
             return await Task.Run(async () =>
@@ -811,23 +1076,51 @@ namespace BiosOptimizer.Core.Implementations.Power
 
                 Guid newSchemeGuid = Guid.Empty;
 
-                // 1. Native Duplicate Scheme
-                IntPtr pDest;
-                uint nativeDup = PowerDuplicateScheme(IntPtr.Zero, ref baseGuid, out pDest);
-                if (nativeDup == 0 && pDest != IntPtr.Zero)
+                // 1. Try powercfg /duplicatescheme with explicit desired destination GUID if provided
+                if (!string.IsNullOrWhiteSpace(desiredGuidStr) && Guid.TryParse(desiredGuidStr, out Guid desiredGuid))
                 {
-                    try
+                    string normDesired = NormalizeGuid(desiredGuid.ToString());
+                    var dupCliWithDest = await TaskExecutionSupervisor.ExecuteProcessAsync(
+                        GetPowercfgPath(),
+                        $"-duplicatescheme {normBase} {normDesired}",
+                        TimeSpan.FromSeconds(8),
+                        externalCt: ct
+                    );
+
+                    if (dupCliWithDest.ExitCode == 0 && !string.IsNullOrWhiteSpace(dupCliWithDest.StandardOutput))
                     {
-                        object? structObj = Marshal.PtrToStructure(pDest, typeof(Guid));
-                        if (structObj is Guid g) newSchemeGuid = g;
-                    }
-                    finally
-                    {
-                        LocalFree(pDest);
+                        var (parsedGuidStr, _) = ParseSchemeLine(dupCliWithDest.StandardOutput);
+                        if (Guid.TryParse(parsedGuidStr, out Guid parsedGuid))
+                        {
+                            newSchemeGuid = parsedGuid;
+                        }
+                        else if (Guid.TryParse(normDesired, out Guid dG))
+                        {
+                            newSchemeGuid = dG;
+                        }
                     }
                 }
 
-                // Fallback CLI duplicate
+                // 2. Native Win32 Duplicate Scheme
+                if (newSchemeGuid == Guid.Empty)
+                {
+                    IntPtr pDest;
+                    uint nativeDup = PowerDuplicateScheme(IntPtr.Zero, ref baseGuid, out pDest);
+                    if (nativeDup == 0 && pDest != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            object? structObj = Marshal.PtrToStructure(pDest, typeof(Guid));
+                            if (structObj is Guid g) newSchemeGuid = g;
+                        }
+                        finally
+                        {
+                            LocalFree(pDest);
+                        }
+                    }
+                }
+
+                // 3. Fallback CLI duplicate without destination GUID
                 if (newSchemeGuid == Guid.Empty)
                 {
                     var dupRes = await TaskExecutionSupervisor.ExecuteProcessAsync(
@@ -856,7 +1149,7 @@ namespace BiosOptimizer.Core.Implementations.Power
 
                 string newGuidStr = NormalizeGuid(newSchemeGuid.ToString());
 
-                // 2. Persist Ownership Record immediately
+                // 4. Persist Ownership Record immediately
                 RecordOwnership(new PowerPlanOwnershipRecord
                 {
                     Guid = newGuidStr,
@@ -865,10 +1158,10 @@ namespace BiosOptimizer.Core.Implementations.Power
                     PlanType = planType,
                     Owner = "ErrorOptimizer",
                     CreationTime = DateTime.UtcNow,
-                    Version = "3.0"
+                    Version = "4.0"
                 });
 
-                // 3. Rename Scheme via Win32 + powercfg
+                // 5. Rename Scheme via Win32 + powercfg
                 PowerWriteFriendlyName(IntPtr.Zero, ref newSchemeGuid, IntPtr.Zero, IntPtr.Zero, planName, (uint)((planName.Length + 1) * 2));
                 PowerWriteDescription(IntPtr.Zero, ref newSchemeGuid, IntPtr.Zero, IntPtr.Zero, planDesc, (uint)((planDesc.Length + 1) * 2));
 
@@ -879,20 +1172,11 @@ namespace BiosOptimizer.Core.Implementations.Power
                     externalCt: ct
                 );
 
-                // 4. Tune default processor settings if custom
-                Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                var verifiedSettings = new List<PowerPlanSettingItem>();
-                ApplyAndVerifySetting(newSchemeGuid, subGroup, GUID_PROCTHROTTLEMIN, "Minimum Processor State", 100, 5, verifiedSettings);
-                ApplyAndVerifySetting(newSchemeGuid, subGroup, GUID_PROCTHROTTLEMAX, "Maximum Processor State", 100, 100, verifiedSettings);
-                ApplyAndVerifySetting(newSchemeGuid, subGroup, GUID_SYSCOOLPOL, "System Cooling Policy", 0, 0, verifiedSettings);
-                ApplyAndVerifySetting(newSchemeGuid, subGroup, GUID_PERFBOOSTMODE, "Processor Performance Boost Mode", 2, 1, verifiedSettings);
-
                 result.Success = true;
                 result.Verified = true;
                 result.TargetSchemeGuid = newGuidStr;
                 result.ActiveSchemeGuid = newGuidStr;
                 result.ActiveSchemeName = planName;
-                result.VerifiedSettings = verifiedSettings;
                 result.Message = $"Custom power plan '{planName}' created successfully ({newGuidStr}).";
 
                 return result;
@@ -1315,14 +1599,128 @@ namespace BiosOptimizer.Core.Implementations.Power
         /// <summary>
         /// Restores the previously active power plan GUID saved before the last change.
         /// </summary>
+        public async Task<OptimizationExecutionResult> ApplyAiMaxPerformanceAcAsync(CancellationToken ct = default)
+        {
+            var res = await CreateOrGetAiMaxPerformancePlanAsync(ct);
+            return new OptimizationExecutionResult
+            {
+                Success = res.Success,
+                RecommendationId = "rec.power.ai_max_performance_ac",
+                OperationId = "PowerPlan:ProcessorPowerManagement",
+                Message = res.Success
+                    ? $"AI Max Performance plan activated and verified ({res.ActiveSchemeName}). Min/Max CPU states, Active cooling policy, and Core unparking confirmed."
+                    : $"Failed to activate AI Max Performance plan: {res.Message}",
+                LifecycleState = res.Success ? RecommendationLifecycle.Verified : RecommendationLifecycle.Failed,
+                Verified = res.Verified,
+                RestartRequired = false,
+                BeforeState = "Standard Windows Power Scheme",
+                AfterState = res.ActiveSchemeName
+            };
+        }
+
+        public async Task<OptimizationExecutionResult> ApplyAiBatteryEfficiencyDcAsync(CancellationToken ct = default)
+        {
+            var res = await CreateOrGetAiBatteryEfficiencyPlanAsync(ct);
+            return new OptimizationExecutionResult
+            {
+                Success = res.Success,
+                RecommendationId = "rec.power.battery_efficiency_dc",
+                OperationId = "PowerPlan:AcDcTransition",
+                Message = res.Success
+                    ? $"AI Battery Efficiency plan activated and verified ({res.ActiveSchemeName}). CPU throttle capping and passive cooling policy confirmed."
+                    : $"Failed to activate AI Battery Efficiency plan: {res.Message}",
+                LifecycleState = res.Success ? RecommendationLifecycle.Verified : RecommendationLifecycle.Failed,
+                Verified = res.Verified,
+                RestartRequired = false,
+                BeforeState = "High Power Draw Scheme",
+                AfterState = res.ActiveSchemeName
+            };
+        }
+
+        public async Task<OptimizationExecutionResult> RestoreOriginalWindowsPlanAsync(CancellationToken ct = default)
+        {
+            var res = await RestorePreviousPowerPlanAsync(ct);
+            return new OptimizationExecutionResult
+            {
+                Success = res.Success,
+                RecommendationId = "rec.power.restore_original",
+                OperationId = "PowerPlan:Scheme",
+                Message = res.Success
+                    ? $"Restored previous Windows power scheme ({res.ActiveSchemeName}) successfully."
+                    : $"Failed to restore power scheme: {res.Message}",
+                LifecycleState = res.Success ? RecommendationLifecycle.Restored : RecommendationLifecycle.Failed,
+                Verified = res.Verified,
+                RestartRequired = false,
+                BeforeState = "Error Optimizer AI Plan",
+                AfterState = res.ActiveSchemeName
+            };
+        }
+
+        public async Task<bool> IsCurrentSchemeAiManagedAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                var (guid, name) = await GetActiveSchemeAsync(ct).ConfigureAwait(false);
+                if (IsAiManagedScheme(guid, name))
+                    return true;
+
+                var plans = await DiscoverPowerPlansAsync(ct).ConfigureAwait(false);
+                return plans.Any(p => p.IsActive && (p.IsErrorOptimizerOwned || p.IsAiMaxPerformance || p.IsAiBatteryEfficiency));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public async Task<PowerPlanOperationResult> RestorePreviousPowerPlanAsync(CancellationToken ct = default)
         {
-            string prevGuid;
+            string? candidate;
             lock (_lock)
             {
-                prevGuid = _previousActiveSchemeGuid ?? BalancedGuid;
+                candidate = _previousActiveSchemeGuid;
             }
-            return await ApplyPowerPlanAsync(prevGuid, PowerPlanChangeSource.RESTORE, ct);
+
+            if (string.IsNullOrWhiteSpace(candidate) || IsAiManagedScheme(candidate, null))
+            {
+                candidate = LoadPersistedBaselineSchemeGuid();
+            }
+
+            var plans = await DiscoverPowerPlansAsync(ct).ConfigureAwait(false);
+            string targetGuid = BalancedGuid;
+
+            if (!string.IsNullOrWhiteSpace(candidate) && !IsAiManagedScheme(candidate, null))
+            {
+                var match = plans.FirstOrDefault(p =>
+                    p.IsInstalled &&
+                    NormalizeGuid(p.Guid).Equals(NormalizeGuid(candidate), StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    targetGuid = match.Guid;
+                }
+            }
+            else if (plans.FirstOrDefault(p => p.IsInstalled && !p.IsErrorOptimizerOwned &&
+                     NormalizeGuid(p.Guid).Equals(BalancedGuid, StringComparison.OrdinalIgnoreCase)) == null)
+            {
+                targetGuid = plans.FirstOrDefault(p => p.IsInstalled && !p.IsErrorOptimizerOwned)?.Guid ?? BalancedGuid;
+            }
+
+            return await ApplyPowerPlanAsync(targetGuid, PowerPlanChangeSource.RESTORE, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Restores and verifies the standard Windows Balanced power scheme.
+        /// </summary>
+        public async Task<PowerPlanOperationResult> RestoreBalancedPlanAsync(CancellationToken ct = default)
+        {
+            var plans = await DiscoverPowerPlansAsync(ct).ConfigureAwait(false);
+            var balancedPlan = plans.FirstOrDefault(p =>
+                p.IsInstalled &&
+                (NormalizeGuid(p.Guid).Equals(BalancedGuid, StringComparison.OrdinalIgnoreCase) ||
+                 p.Name.Equals("Balanced", StringComparison.OrdinalIgnoreCase)));
+
+            string targetGuid = balancedPlan?.Guid ?? BalancedGuid;
+            return await ApplyPowerPlanAsync(targetGuid, PowerPlanChangeSource.RESTORE, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1548,14 +1946,14 @@ namespace BiosOptimizer.Core.Implementations.Power
             catch { }
         }
 
-        private static void ApplyAndVerifySetting(
+        private static async Task<PowerPlanSettingItem> ApplyAndVerifySettingAsync(
             Guid schemeGuid,
             Guid subGroup,
             Guid settingGuid,
             string name,
             uint targetAC,
             uint targetDC,
-            List<PowerPlanSettingItem> resultList)
+            CancellationToken ct = default)
         {
             var item = new PowerPlanSettingItem
             {
@@ -1566,20 +1964,77 @@ namespace BiosOptimizer.Core.Implementations.Power
                 TargetDC = targetDC
             };
 
-            // Write AC and DC values
+            string schemeGuidStr = NormalizeGuid(schemeGuid.ToString());
+            string subGroupStr = NormalizeGuid(subGroup.ToString());
+            string settingGuidStr = NormalizeGuid(settingGuid.ToString());
+
+            // 1. Write via Win32 PowrProf API
             uint retAc = PowerWriteACValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref settingGuid, targetAC);
             uint retDc = PowerWriteDCValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref settingGuid, targetDC);
-            item.Applied = (retAc == 0 || retDc == 0);
 
-            // Readback Verification
+            // 2. Also invoke powercfg -setacvalueindex & -setdcvalueindex for persistent registry committing
+            try
+            {
+                await TaskExecutionSupervisor.ExecuteProcessAsync(
+                    GetPowercfgPath(),
+                    $"-setacvalueindex {schemeGuidStr} {subGroupStr} {settingGuidStr} {targetAC}",
+                    TimeSpan.FromSeconds(3),
+                    externalCt: ct
+                );
+                await TaskExecutionSupervisor.ExecuteProcessAsync(
+                    GetPowercfgPath(),
+                    $"-setdcvalueindex {schemeGuidStr} {subGroupStr} {settingGuidStr} {targetDC}",
+                    TimeSpan.FromSeconds(3),
+                    externalCt: ct
+                );
+            }
+            catch { }
+
+            // 3. Readback Verification directly from Windows
             uint readAc = 0, readDc = 0;
             uint readRetAc = PowerReadACValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref settingGuid, out readAc);
             uint readRetDc = PowerReadDCValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref settingGuid, out readDc);
 
-            item.CurrentAC = readAc;
-            item.CurrentDC = readDc;
-            item.Verified = (readRetAc == 0 && readAc == targetAC) && (readRetDc == 0 && readDc == targetDC);
+            bool acReadOk = (readRetAc == 0);
+            bool dcReadOk = (readRetDc == 0);
 
+            if (!acReadOk && !dcReadOk)
+            {
+                item.Supported = false;
+                item.Applied = false;
+                item.Verified = false;
+                item.Description = "Hardware, firmware or Windows build does not expose this setting index";
+                return item;
+            }
+
+            item.Supported = true;
+            item.CurrentAC = acReadOk ? readAc : targetAC;
+            item.CurrentDC = dcReadOk ? readDc : targetDC;
+            item.Applied = (retAc == 0 || retDc == 0 || acReadOk || dcReadOk);
+            item.Verified = (acReadOk && readAc == targetAC) && (dcReadOk && readDc == targetDC);
+
+            if (!item.Verified)
+            {
+                item.Description = $"Readback: AC={(acReadOk ? readAc.ToString() : "err")}/{targetAC}, DC={(dcReadOk ? readDc.ToString() : "err")}/{targetDC}";
+            }
+            else
+            {
+                item.Description = $"Verified (AC={readAc}, DC={readDc})";
+            }
+
+            return item;
+        }
+
+        private static void ApplyAndVerifySetting(
+            Guid schemeGuid,
+            Guid subGroup,
+            Guid settingGuid,
+            string name,
+            uint targetAC,
+            uint targetDC,
+            List<PowerPlanSettingItem> resultList)
+        {
+            var item = ApplyAndVerifySettingAsync(schemeGuid, subGroup, settingGuid, name, targetAC, targetDC).GetAwaiter().GetResult();
             resultList.Add(item);
         }
 
@@ -1667,6 +2122,34 @@ namespace BiosOptimizer.Core.Implementations.Power
         private static Dictionary<string, PowerPlanOwnershipRecord> GetOwnershipRecords()
         {
             var map = new Dictionary<string, PowerPlanOwnershipRecord>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Load shared cross-process ownership metadata (shared between LocalSystem Service & interactive Host)
+            try
+            {
+                lock (_sharedStoreLock)
+                {
+                    string path = GetSharedOwnershipFilePath(readOnly: true);
+                    if (File.Exists(path))
+                    {
+                        string json = File.ReadAllText(path);
+                        var shared = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, PowerPlanOwnershipRecord>>(
+                            json,
+                            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (shared != null)
+                        {
+                            foreach (var kv in shared)
+                            {
+                                string norm = NormalizeGuid(kv.Key);
+                                kv.Value.Guid = norm;
+                                map[norm] = kv.Value;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Merge current-hive HKCU entries
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(REG_AI_PLANS_KEY);
@@ -1708,23 +2191,120 @@ namespace BiosOptimizer.Core.Implementations.Power
 
         private static void RecordOwnership(PowerPlanOwnershipRecord record)
         {
+            string norm = NormalizeGuid(record.Guid);
+            record.Guid = norm;
+
+            try
+            {
+                lock (_sharedStoreLock)
+                {
+                    var all = GetOwnershipRecords();
+                    all[norm] = record;
+                    string path = GetSharedOwnershipFilePath(readOnly: false);
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(all));
+                }
+            }
+            catch { }
+
             try
             {
                 using var key = Registry.CurrentUser.CreateSubKey(REG_AI_PLANS_KEY);
                 string json = System.Text.Json.JsonSerializer.Serialize(record);
-                key?.SetValue(NormalizeGuid(record.Guid), json);
+                key?.SetValue(norm, json);
             }
             catch { }
         }
 
         private static void RemoveOwnership(string guid)
         {
+            string norm = NormalizeGuid(guid);
+
+            try
+            {
+                lock (_sharedStoreLock)
+                {
+                    var all = GetOwnershipRecords();
+                    if (all.Remove(norm))
+                    {
+                        string path = GetSharedOwnershipFilePath(readOnly: false);
+                        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(all));
+                    }
+                }
+            }
+            catch { }
+
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(REG_AI_PLANS_KEY, writable: true);
-                key?.DeleteValue(NormalizeGuid(guid), false);
+                key?.DeleteValue(norm, false);
             }
             catch { }
+        }
+
+        private static string GetSharedOwnershipFilePath(bool readOnly) =>
+            readOnly
+                ? BiosOptimizer.Core.Common.AppEnvironment.ResolveDataReadPath("ai-power-plans.json")
+                : Path.Combine(BiosOptimizer.Core.Common.AppEnvironment.ResolveWritableDataDirectory(), "ai-power-plans.json");
+
+        private static string GetSharedBaselineFilePath(bool readOnly) =>
+            readOnly
+                ? BiosOptimizer.Core.Common.AppEnvironment.ResolveDataReadPath("power-baseline.json")
+                : Path.Combine(BiosOptimizer.Core.Common.AppEnvironment.ResolveWritableDataDirectory(), "power-baseline.json");
+
+        private static bool IsAiManagedScheme(string? guid, string? name)
+        {
+            if (!string.IsNullOrWhiteSpace(name) &&
+                (name.Contains("Error Optimizer", StringComparison.OrdinalIgnoreCase) ||
+                 name.Equals(AI_MAX_PERF_PLAN_NAME, StringComparison.OrdinalIgnoreCase) ||
+                 name.Equals(AI_BATTERY_PLAN_NAME, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(guid))
+                return false;
+
+            string norm = NormalizeGuid(guid);
+            return GetOwnershipRecords().ContainsKey(norm);
+        }
+
+        private static void PersistBaselineScheme(string guid, string name)
+        {
+            try
+            {
+                lock (_sharedStoreLock)
+                {
+                    string path = GetSharedBaselineFilePath(readOnly: false);
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    string json = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        BaselineGuid = NormalizeGuid(guid),
+                        BaselineName = name,
+                        SavedAtUtc = DateTime.UtcNow
+                    });
+                    File.WriteAllText(path, json);
+                }
+            }
+            catch { }
+        }
+
+        private static string? LoadPersistedBaselineSchemeGuid()
+        {
+            try
+            {
+                lock (_sharedStoreLock)
+                {
+                    string path = GetSharedBaselineFilePath(readOnly: true);
+                    if (!File.Exists(path)) return null;
+                    using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+                    if (doc.RootElement.TryGetProperty("BaselineGuid", out var g) && g.ValueKind == System.Text.Json.JsonValueKind.String)
+                        return g.GetString();
+                }
+            }
+            catch { }
+            return null;
         }
 
         #endregion

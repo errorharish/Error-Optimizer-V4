@@ -29,7 +29,20 @@ namespace BiosOptimizer.GUI.ViewModels
         private string _healthModalProgressText = "0 / 18 CHECKS PROCESSED";
         private string _currentFindingFilter = "ALL";
 
-        // Section Expansion States
+        // Unified & Section Expansion States
+        private bool _isTechnicalDetailsExpanded;
+        public bool IsTechnicalDetailsExpanded
+        {
+            get => _isTechnicalDetailsExpanded;
+            set
+            {
+                _isTechnicalDetailsExpanded = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TechnicalDetailsToggleText));
+            }
+        }
+        public string TechnicalDetailsToggleText => IsTechnicalDetailsExpanded ? "HIDE TECHNICAL DETAILS ▲" : "VIEW TECHNICAL DETAILS ▼";
+
         private bool _isGpuDetailsExpanded;
         private bool _isCpuDetailsExpanded;
         private bool _isMemoryDetailsExpanded;
@@ -147,14 +160,14 @@ namespace BiosOptimizer.GUI.ViewModels
         }
 
         // Hero Summary & Health Ring Helpers
-        public string OverallHealthStatus => HealthReport.OverallRating;
+        public string OverallHealthStatus => IsHealthScanCompleted ? HealthReport.OverallRating : "NOT MEASURED";
         public string HealthBadgeBrush => OverallHealthStatus switch
         {
             "EXCELLENT" => "#10B981",
             "GOOD" => "#10B981",
             "WARNING" => "#F59E0B",
             "CRITICAL" => "#E53935",
-            _ => "#E53935"
+            _ => "#6B7280"
         };
 
         public string HealthRingColor => IsHealthScanning ? "#60A5FA" : HealthBadgeBrush;
@@ -170,12 +183,12 @@ namespace BiosOptimizer.GUI.ViewModels
             : "Click to run a comprehensive system health analysis";
 
         // Subsystem Health Status Indicators for Health Hero
-        public string HardwareHealthStatus => HealthReport.Findings.Any(f => f.Category == "Hardware" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
-        public string WindowsHealthStatus => HealthReport.Findings.Any(f => f.Category == "Windows" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
-        public string SecurityHealthStatus => HealthReport.Findings.Any(f => f.Category == "Security" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
-        public string StorageHealthStatus => HealthReport.Findings.Any(f => f.Category == "Storage" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
-        public string PerformanceHealthStatus => HealthReport.Findings.Any(f => f.Category == "Performance" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
-        public string DriversHealthStatus => HealthReport.Findings.Any(f => f.Category == "Drivers" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "WARNING" : "HEALTHY";
+        public string HardwareHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Hardware" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
+        public string WindowsHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Windows" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
+        public string SecurityHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Security" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
+        public string StorageHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Storage" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
+        public string PerformanceHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Performance" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
+        public string DriversHealthStatus => !IsHealthScanCompleted ? "NOT MEASURED" : (HealthReport.Findings.Any(f => f.Category == "Drivers" && (f.Severity == "WARNING" || f.Severity == "CRITICAL")) ? "ATTENTION" : "HEALTHY");
 
         public string PrimaryGpuSummary
         {
@@ -201,7 +214,73 @@ namespace BiosOptimizer.GUI.ViewModels
             }
         }
 
+        // Clean Essential Overview Summary Properties
+        public string CpuCoresSummary
+        {
+            get
+            {
+                if (Cpu.PhysicalCores > 0 && Cpu.LogicalProcessors > 0)
+                    return $"{Cpu.PhysicalCores} Cores • {Cpu.LogicalProcessors} Threads";
+                if (Cpu.LogicalProcessors > 0)
+                    return $"{Cpu.LogicalProcessors} Logical Processors";
+                return Cpu.Architecture;
+            }
+        }
+
+        public string PrimaryGpuVramSummary
+        {
+            get
+            {
+                var gpu = Diagnostics.Gpus.FirstOrDefault();
+                if (gpu != null && !string.IsNullOrEmpty(gpu.DedicatedVramText) && gpu.DedicatedVramText != "LOADING...")
+                    return $"{gpu.DedicatedVramText} Dedicated VRAM";
+                return Graphics.DirectXVersion;
+            }
+        }
+
+        public string MemoryCapacityUsageSummary
+        {
+            get
+            {
+                if (Memory.UsagePercentage > 0)
+                    return $"{Memory.UsagePercentage:F0}% Used • {Memory.AvailableRamText} Free";
+                return Memory.AvailableRamText;
+            }
+        }
+
+        public string PrimaryStorageFreeSummary
+        {
+            get
+            {
+                var sys = Storage.Partitions.FirstOrDefault(p => p.IsSystemDrive) ?? Storage.Partitions.FirstOrDefault();
+                if (sys != null && !string.IsNullOrEmpty(sys.FreeText) && sys.FreeText != "LOADING...")
+                    return $"{sys.FreeText} Free ({sys.UsedText} Used)";
+                return Storage.PrimaryStorageType;
+            }
+        }
+
+        public string WindowsBuildSummary
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(Windows.Version) && Windows.Version != "LOADING...")
+                    return $"Version {Windows.Version} • Build {Windows.OsBuild}";
+                return $"Build {Windows.OsBuild}";
+            }
+        }
+
+        public string PowerBatteryHealthSummary
+        {
+            get
+            {
+                if (Power.HasBattery)
+                    return $"{Power.BatteryPercentage}% ({Power.BatteryHealth})";
+                return Power.PowerPlan;
+            }
+        }
+
         public ICommand RefreshCommand { get; }
+        public ICommand ToggleTechnicalDetailsCommand { get; }
         public ICommand RunHealthAnalysisCommand { get; }
         public ICommand CloseHealthModalCommand { get; }
         public ICommand FilterFindingsCommand { get; }
@@ -234,6 +313,7 @@ namespace BiosOptimizer.GUI.ViewModels
             ToggleWindowsDetailsCommand = new RelayCommand(_ => IsWindowsDetailsExpanded = !IsWindowsDetailsExpanded);
             ToggleNetworkDetailsCommand = new RelayCommand(_ => IsNetworkDetailsExpanded = !IsNetworkDetailsExpanded);
             TogglePerformanceDetailsCommand = new RelayCommand(_ => IsPerformanceDetailsExpanded = !IsPerformanceDetailsExpanded);
+            ToggleTechnicalDetailsCommand = new RelayCommand(_ => IsTechnicalDetailsExpanded = !IsTechnicalDetailsExpanded);
         }
 
         public override async Task OnNavigatedToAsync()

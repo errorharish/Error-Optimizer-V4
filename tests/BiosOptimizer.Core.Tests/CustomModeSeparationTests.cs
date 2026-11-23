@@ -17,6 +17,9 @@ namespace BiosOptimizer.Core.Tests
         public bool IsServiceAvailable => ConnectionState == IpcConnectionState.Connected;
         public IpcConnectionState ConnectionState { get; set; } = IpcConnectionState.Connected;
         public string ServiceBuildId => "2026.08.22.1429";
+        public bool IsOnline => IsServiceAvailable;
+        public string StatusText => IsServiceAvailable ? "ONLINE" : "OFFLINE";
+        public System.Windows.Media.Brush StatusBrush => System.Windows.Media.Brushes.LimeGreen;
         public event Action<bool>? ServiceAvailabilityChanged { add { } remove { } }
         public event Action<IpcConnectionState>? ConnectionStateChanged { add { } remove { } }
 

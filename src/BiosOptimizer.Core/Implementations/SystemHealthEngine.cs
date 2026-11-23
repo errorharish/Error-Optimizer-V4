@@ -103,17 +103,59 @@ namespace BiosOptimizer.Core.Implementations
             snapshot.Categories = categories;
             snapshot.ActiveRecommendations = recommendations;
 
-            // Calculate Unified Health Score
+            // Calculate Unified Health Score strictly over measured checks
             double totalWeighted = 0;
-            double totalWeight = 0;
+            double measuredWeight = 0;
+            double totalPossibleWeight = 0;
 
             foreach (var cat in categories)
             {
-                totalWeighted += cat.Score * cat.Weight;
-                totalWeight += cat.Weight;
+                totalPossibleWeight += cat.Weight;
+                if (cat.IsMeasured && cat.State != HealthState.Unknown)
+                {
+                    totalWeighted += cat.Score * cat.Weight;
+                    measuredWeight += cat.Weight;
+                }
+                else
+                {
+                    snapshot.UnmeasuredCategories.Add(cat.Name);
+                }
+
+                snapshot.Checks.Add(new HealthCheckItem
+                {
+                    Id = $"health.{cat.Category.ToString().ToLowerInvariant()}",
+                    Name = cat.Name,
+                    Category = cat.Category.ToString(),
+                    Status = cat.Status,
+                    IsMeasured = cat.IsMeasured,
+                    MeasuredValue = string.IsNullOrWhiteSpace(cat.MeasuredValue) ? cat.HealthLabel : cat.MeasuredValue,
+                    ReferenceThreshold = cat.ReferenceThreshold,
+                    Severity = cat.State switch
+                    {
+                        HealthState.Critical => RecommendationSeverity.Critical,
+                        HealthState.Warning => RecommendationSeverity.High,
+                        HealthState.Unknown => RecommendationSeverity.Medium,
+                        _ => RecommendationSeverity.Info
+                    },
+                    Explanation = cat.Evidence,
+                    ErrorDetail = cat.ErrorDetail,
+                    TimestampUtc = cat.LastChecked == default ? DateTime.UtcNow : cat.LastChecked.ToUniversalTime()
+                });
             }
 
-            int rawScore = totalWeight > 0 ? (int)Math.Round(totalWeighted / totalWeight) : 100;
+            snapshot.Coverage = totalPossibleWeight > 0 ? Math.Round(measuredWeight / totalPossibleWeight, 3) : 0.0;
+
+            if (measuredWeight <= 0)
+            {
+                snapshot.OverallScore = 0;
+                snapshot.OverallHealthState = HealthState.Unknown;
+                snapshot.OverallHealthText = "HEALTH DATA UNAVAILABLE — NO MEASURED CHECKS";
+                sw.Stop();
+                snapshot.ScanDuration = sw.Elapsed;
+                return snapshot;
+            }
+
+            int rawScore = (int)Math.Round(totalWeighted / measuredWeight);
             rawScore = Math.Clamp(rawScore, 0, 100);
 
             // Apply Critical Health Caps
@@ -219,9 +261,9 @@ namespace BiosOptimizer.Core.Implementations
                             Target = "< 75% Load",
                             Risk = "SAFE",
                             Confidence = 0.98,
-                            ActionId = "OPEN_RAM_LIMITER",
-                            ActionLabel = "OPTIMIZE RAM",
-                            TargetEngine = "RamLimiterEngine"
+                            ActionId = "TRIM_WORKING_SET",
+                            ActionLabel = "TRIM MEMORY",
+                            TargetEngine = "RamCleanupEngine"
                         });
                     }
                     else if (load >= 82)
@@ -250,30 +292,58 @@ namespace BiosOptimizer.Core.Implementations
                     {
                         cat.Score = 80;
                         cat.State = HealthState.Good;
+                        cat.Status = "Healthy";
                         cat.HealthLabel = "MODERATE LOAD";
                     }
                     else
                     {
                         cat.Score = 100;
                         cat.State = HealthState.Excellent;
+                        cat.Status = "Healthy";
                         cat.HealthLabel = "OPTIMAL";
                     }
+
+                    if (load >= 92) cat.Status = "Critical";
+                    else if (load >= 82) cat.Status = "Warning";
+                    cat.MeasuredValue = $"{load}% ({availGb:F1} / {totalGb:F1} GB free)";
+                    cat.ReferenceThreshold = "< 75% Load";
+                    cat.LastChecked = DateTime.UtcNow;
                 }
                 else
                 {
-                    cat.Score = 90;
-                    cat.Evidence = "Standard memory architecture active";
-                    cat.HealthLabel = "READY";
+                    MarkCategoryFailure(cat, "FailedToCollect", "GlobalMemoryStatusEx returned false");
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 80;
-                cat.Evidence = $"Memory telemetry query notice: {ex.Message}";
-                cat.HealthLabel = "HEALTH DATA UNAVAILABLE";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
+        }
+
+        private static void MarkCategoryFailure(HealthCategoryScore cat, string status, string reason)
+        {
+            cat.Score = 0;
+            cat.State = HealthState.Unknown;
+            cat.Status = status;
+            cat.IsMeasured = false;
+            cat.Confidence = 0.0;
+            cat.HealthLabel = status switch
+            {
+                "AccessDenied" => "ACCESS DENIED",
+                "Unsupported" => "UNSUPPORTED",
+                _ => "FAILED TO COLLECT"
+            };
+            cat.ErrorDetail = reason;
+            cat.Evidence = $"Collection failed ({status}): {reason}";
+            cat.LastChecked = DateTime.UtcNow;
+        }
+
+        private static void MarkCategoryException(HealthCategoryScore cat, Exception ex)
+        {
+            string status = ex is UnauthorizedAccessException ? "AccessDenied" : "FailedToCollect";
+            MarkCategoryFailure(cat, status, ex.Message);
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -291,28 +361,59 @@ namespace BiosOptimizer.Core.Implementations
 
             try
             {
-                var cDrive = new DriveInfo("C");
-                long total = cDrive.TotalSize;
-                long free = cDrive.AvailableFreeSpace;
-                double freePct = (free * 100.0) / total;
+                var agg = Storage.StorageEngine.ComputeFastFixedVolumeAggregate();
+                if (agg.VolumeCount == 0 || agg.UnifiedTotalBytes <= 0)
+                {
+                    MarkCategoryFailure(cat, "Unsupported", "No ready fixed local storage volumes detected.");
+                    return cat;
+                }
+
+                long total = agg.UnifiedTotalBytes;
+                long free = agg.UnifiedFreeBytes;
+                double freePct = Math.Round((free * 100.0) / total, 1);
                 double freeGb = free / (1024.0 * 1024 * 1024);
                 double totalGb = total / (1024.0 * 1024 * 1024);
 
-                cat.Evidence = $"Drive C: {freeGb:F1} GB free of {totalGb:F1} GB ({freePct:F1}% available)";
+                string osDriveRoot = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+                double? osFreeGb = null;
+                double? osFreePct = null;
+                try
+                {
+                    var sysDrive = new DriveInfo(osDriveRoot);
+                    if (sysDrive.IsReady && sysDrive.TotalSize > 0)
+                    {
+                        osFreeGb = sysDrive.AvailableFreeSpace / (1024.0 * 1024 * 1024);
+                        osFreePct = (sysDrive.AvailableFreeSpace * 100.0) / sysDrive.TotalSize;
+                    }
+                }
+                catch { }
 
-                if (freePct < 10.0 || freeGb < 15.0)
+                cat.Evidence = $"{agg.ScopeLabel}: {freeGb:F1} GB free of {totalGb:F1} GB ({freePct:F1}% available)";
+                cat.MeasuredValue = $"{freeGb:F1} GB free ({freePct:F1}%) across {agg.VolumeCount} volume(s)";
+                cat.ReferenceThreshold = ">= 20% Free (>= 30 GB)";
+                cat.LastChecked = DateTime.UtcNow;
+
+                bool sysDriveCritical = osFreeGb.HasValue && (osFreeGb.Value < 15.0 || (osFreePct ?? 100.0) < 10.0);
+                bool sysDriveWarning = osFreeGb.HasValue && (osFreeGb.Value < 30.0 || (osFreePct ?? 100.0) < 20.0);
+
+                if (freePct < 10.0 || freeGb < 15.0 || sysDriveCritical)
                 {
                     cat.Score = 35;
                     cat.State = HealthState.Critical;
+                    cat.Status = "Critical";
                     cat.HealthLabel = "LOW STORAGE";
                     cat.Recommendations.Add(new HealthRecommendation
                     {
                         RecommendationId = "REC_STORAGE_LOW",
                         Category = SystemHealthCategoryType.Storage,
                         Severity = RecommendationSeverity.Critical,
-                        Title = "Critically Low Disk Space on C:",
+                        Title = sysDriveCritical
+                            ? $"Critically Low Disk Space on {osDriveRoot.TrimEnd('\\')}"
+                            : "Critically Low Unified Fixed Storage Space",
                         Why = "Low disk space compromises pagefile expansion, temporary operations, and update staging.",
-                        Evidence = $"Only {freeGb:F1} GB ({freePct:F1}%) remaining on system volume.",
+                        Evidence = sysDriveCritical
+                            ? $"System volume {osDriveRoot.TrimEnd('\\')} has only {osFreeGb:F1} GB ({osFreePct:F1}%) remaining (unified: {freeGb:F1} / {totalGb:F1} GB free)."
+                            : $"Only {freeGb:F1} GB ({freePct:F1}%) remaining across {agg.VolumeLettersSummary}.",
                         CurrentValue = $"{freeGb:F1} GB Free",
                         Target = "> 25 GB Free",
                         Risk = "SAFE",
@@ -322,10 +423,11 @@ namespace BiosOptimizer.Core.Implementations
                         TargetEngine = "StorageCleanerEngine"
                     });
                 }
-                else if (freePct < 20.0 || freeGb < 30.0)
+                else if (freePct < 20.0 || freeGb < 30.0 || sysDriveWarning)
                 {
                     cat.Score = 70;
                     cat.State = HealthState.Warning;
+                    cat.Status = "Warning";
                     cat.HealthLabel = "STORAGE WARNING";
                     cat.Recommendations.Add(new HealthRecommendation
                     {
@@ -334,7 +436,9 @@ namespace BiosOptimizer.Core.Implementations
                         Severity = RecommendationSeverity.Medium,
                         Title = "Reclaimable Cache & Temp Buildup",
                         Why = "Temporary directories and delivery caches contain reclaimable space.",
-                        Evidence = $"System volume has {freePct:F1}% free space.",
+                        Evidence = sysDriveWarning
+                            ? $"System volume {osDriveRoot.TrimEnd('\\')} is at {osFreePct:F1}% free space ({osFreeGb:F1} GB); unified fixed free space is {freeGb:F1} GB ({freePct:F1}%)."
+                            : $"Unified fixed storage ({agg.VolumeLettersSummary}) has {freePct:F1}% free space.",
                         CurrentValue = $"{freeGb:F1} GB Free",
                         Target = "> 25% Free",
                         Risk = "SAFE",
@@ -348,14 +452,13 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "OPTIMAL";
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 85;
-                cat.Evidence = $"Storage telemetry query: {ex.Message}";
-                cat.HealthLabel = "HEALTH DATA UNAVAILABLE";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -381,16 +484,17 @@ namespace BiosOptimizer.Core.Implementations
 
                 if (!snap.IsSfcAvailable && !snap.IsDismAvailable)
                 {
-                    cat.Score = 40;
-                    cat.State = HealthState.Warning;
+                    MarkCategoryFailure(cat, "Unsupported", "SFC and DISM servicing binaries are not available in System32.");
                     cat.HealthLabel = "TOOLS UNAVAILABLE";
-                    cat.Evidence = "SFC and DISM servicing binaries are not available in System32.";
                 }
                 else if (snap.RequiredServices.TryGetValue("TrustedInstaller", out var ti) && !ti.IsHealthy)
                 {
                     cat.Score = 65;
                     cat.State = HealthState.Warning;
+                    cat.Status = "Warning";
                     cat.HealthLabel = "SERVICING DEGRADED";
+                    cat.MeasuredValue = "TrustedInstaller Disabled";
+                    cat.ReferenceThreshold = "Manual (Demand)";
                     cat.Evidence = "Windows Modules Installer (TrustedInstaller) is disabled. System file verification blocked.";
                     cat.Recommendations.Add(new HealthRecommendation
                     {
@@ -413,22 +517,27 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     cat.Score = 80;
                     cat.State = HealthState.Good;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "SERVICING ACTIVE";
+                    cat.MeasuredValue = string.Join(", ", snap.ActiveConflictingProcesses);
+                    cat.ReferenceThreshold = "No servicing lock";
                     cat.Evidence = $"Background Windows Servicing in progress: {string.Join(", ", snap.ActiveConflictingProcesses)}";
                 }
                 else
                 {
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "INTEGRITY READY";
+                    cat.MeasuredValue = $"Build {snap.OsBuild} ({snap.Architecture})";
+                    cat.ReferenceThreshold = "SFC/DISM Available & Unlocked";
                     cat.Evidence = $"Windows protected packages and servicing stack ready ({snap.Architecture}, Build {snap.OsBuild})";
                 }
+                cat.LastChecked = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"Integrity state: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -451,18 +560,18 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 bool pendingReboot = false;
-                try
-                {
-                    using var key1 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending");
-                    using var key2 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
-                    if (key1 != null || key2 != null) pendingReboot = true;
-                }
-                catch { }
+                using var key1 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending");
+                using var key2 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
+                if (key1 != null || key2 != null) pendingReboot = true;
 
+                cat.ReferenceThreshold = "No pending servicing reboot";
+                cat.LastChecked = DateTime.UtcNow;
                 if (pendingReboot)
                 {
                     cat.Score = 75;
                     cat.State = HealthState.Warning;
+                    cat.Status = "Warning";
+                    cat.MeasuredValue = "Reboot Pending";
                     cat.HealthLabel = "REBOOT PENDING";
                     cat.Evidence = "Windows Update or servicing stack has pending file renames requiring a reboot.";
                     cat.RequiresReboot = true;
@@ -487,15 +596,15 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
+                    cat.MeasuredValue = "Clean State";
                     cat.HealthLabel = "OPTIMAL";
                     cat.Evidence = "Component store in clean state. No pending reboot operations.";
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"Maintenance check notice: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -521,11 +630,21 @@ namespace BiosOptimizer.Core.Implementations
                 string cpu = profile.CpuModel;
 
                 cat.Evidence = $"{cpu} ({cores} Logical Processors), Tier: {profile.Tier}";
+                cat.MeasuredValue = $"{cores} threads, {profile.RamTotalGb:F1} GB RAM";
+                cat.ReferenceThreshold = ">= 4 Logical Processors";
+                cat.LastChecked = DateTime.UtcNow;
+
+                if (cores <= 0)
+                {
+                    MarkCategoryFailure(cat, "FailedToCollect", "Hardware profiler returned 0 logical cores.");
+                    return cat;
+                }
 
                 if (profile.Tier == HardwareTier.LowResource)
                 {
                     cat.Score = 75;
                     cat.State = HealthState.Good;
+                    cat.Status = "Warning";
                     cat.HealthLabel = "LOW RESOURCE TIER";
                     cat.Recommendations.Add(new HealthRecommendation
                     {
@@ -548,14 +667,13 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "EXCELLENT";
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"Hardware query: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -581,11 +699,15 @@ namespace BiosOptimizer.Core.Implementations
                 bool isAc = !hwProfile.IsBatteryPowered;
 
                 cat.Evidence = $"Active Plan: {activeName} (AC Online: {isAc})";
+                cat.MeasuredValue = $"{activeName} ({(isAc ? "AC" : "Battery")})";
+                cat.ReferenceThreshold = "Balanced / High Performance on AC";
+                cat.LastChecked = DateTime.UtcNow;
 
                 if (isAc && activeName.Contains("Power Saver", StringComparison.OrdinalIgnoreCase))
                 {
                     cat.Score = 65;
                     cat.State = HealthState.Warning;
+                    cat.Status = "Warning";
                     cat.HealthLabel = "SUBOPTIMAL PLAN";
                     cat.Recommendations.Add(new HealthRecommendation
                     {
@@ -609,14 +731,13 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "OPTIMAL";
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"Power query notice: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -641,27 +762,32 @@ namespace BiosOptimizer.Core.Implementations
                     .Where(i => i.OperationalStatus == OperationalStatus.Up && i.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                     .ToList();
 
+                cat.ReferenceThreshold = "Active non-loopback network link";
+                cat.LastChecked = DateTime.UtcNow;
                 if (interfaces.Count > 0)
                 {
                     var primary = interfaces.First();
-                    cat.Evidence = $"Connected: {primary.Name} ({primary.NetworkInterfaceType}), Speed: {primary.Speed / 1_000_000} Mbps";
+                    long mbps = primary.Speed > 0 ? primary.Speed / 1_000_000 : 0;
+                    cat.MeasuredValue = $"{primary.Name} ({mbps} Mbps)";
+                    cat.Evidence = $"Connected: {primary.Name} ({primary.NetworkInterfaceType}), Speed: {mbps} Mbps";
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "CONNECTED & OPTIMAL";
                 }
                 else
                 {
+                    cat.MeasuredValue = "Disconnected";
                     cat.Score = 60;
                     cat.State = HealthState.Warning;
+                    cat.Status = "Warning";
                     cat.HealthLabel = "DISCONNECTED";
                     cat.Evidence = "No active primary network interface detected.";
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 85;
-                cat.Evidence = $"Network telemetry query: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -683,26 +809,28 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 var profile = HardwareProfiler.GetQuickProfile();
+                cat.ReferenceThreshold = "WDDM Hardware Display Adapter";
+                cat.LastChecked = DateTime.UtcNow;
                 if (profile.GpuPresent)
                 {
-                    cat.Evidence = $"{profile.GpuName} (VRAM: {profile.GpuVramGb:F1} GB)";
+                    string vramText = profile.GpuVramGb >= 1.0
+                        ? $"{profile.GpuVramGb:F1} GB VRAM"
+                        : profile.GpuIsDedicated ? "Dedicated GPU" : "Shared System Memory";
+                    cat.MeasuredValue = $"{profile.GpuName} ({vramText})";
+                    cat.Evidence = $"{profile.GpuName} ({vramText})";
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
-                    cat.HealthLabel = "ACTIVE & READY";
+                    cat.Status = "Healthy";
+                    cat.HealthLabel = profile.GpuIsDedicated ? "DISCRETE GPU ACTIVE" : "INTEGRATED GPU ACTIVE";
                 }
                 else
                 {
-                    cat.Evidence = "Standard Display Adapter";
-                    cat.Score = 90;
-                    cat.State = HealthState.Good;
-                    cat.HealthLabel = "BASIC ADAPTER";
+                    MarkCategoryFailure(cat, "Unsupported", "No hardware WDDM/DXGI display adapter detected.");
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"GPU query notice: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -724,27 +852,26 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 int ntStatus = NtQueryTimerResolution(out uint minRes, out uint maxRes, out uint curRes);
-                if (ntStatus == 0)
+                cat.ReferenceThreshold = "Timer resolution <= 15.63 ms";
+                cat.LastChecked = DateTime.UtcNow;
+                if (ntStatus == 0 && curRes > 0)
                 {
                     double curMs = curRes / 10000.0;
+                    cat.MeasuredValue = $"{curMs:F4} ms";
                     cat.Evidence = $"Kernel Timer Resolution: {curMs:F4} ms (Min: {minRes/10000.0:F2}ms, Max: {maxRes/10000.0:F2}ms)";
                     cat.Score = 100;
                     cat.State = HealthState.Excellent;
+                    cat.Status = "Healthy";
                     cat.HealthLabel = "HIGH RESOLUTION";
                 }
                 else
                 {
-                    cat.Evidence = "Windows QPC High-Resolution Platform Clock active";
-                    cat.Score = 95;
-                    cat.State = HealthState.Excellent;
-                    cat.HealthLabel = "QPC ACTIVE";
+                    MarkCategoryFailure(cat, "FailedToCollect", $"NtQueryTimerResolution returned status 0x{ntStatus:X8}.");
                 }
             }
             catch (Exception ex)
             {
-                cat.Score = 90;
-                cat.Evidence = $"Advanced kernel query: {ex.Message}";
-                cat.HealthLabel = "READY";
+                MarkCategoryException(cat, ex);
             }
 
             return cat;
@@ -773,13 +900,13 @@ namespace BiosOptimizer.Core.Implementations
                 switch (rec.ActionId)
                 {
                     case "TRIM_WORKING_SET":
-                    case "OPEN_RAM_LIMITER":
                         long bytesFreed = await Task.Run(() => _ramCleaner.Clean(), ct);
                         return (true, $"RAM Working sets trimmed. Reclaimed {FormatBytes(bytesFreed)} physical memory.");
 
                     case "OPEN_STORAGE_CLEANER":
                         var categories = StorageCleanerEngine.BuildCategories().Take(3).ToList();
-                        var cleanResult = await Task.Run(() => _storageEngine.CleanCategories(categories, "C", null, ct), ct);
+                        string sysDriveLetter = (Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\").TrimEnd('\\', ':');
+                        var cleanResult = await Task.Run(() => _storageEngine.CleanCategories(categories, sysDriveLetter, null, ct), ct);
                         return (cleanResult.Success, $"Storage cleanup executed: {FormatBytes(cleanResult.BytesReclaimed)} reclaimed, {cleanResult.FilesRemoved} files removed.");
 
                     case "SET_HIGH_PERFORMANCE_POWER":
@@ -797,8 +924,15 @@ namespace BiosOptimizer.Core.Implementations
                         var (repaired, repMsg) = WindowsServicingHealthEngine.Instance.EnsureServicingPrerequisites("sfc");
                         return (true, repaired ? $"Servicing prerequisites configured: {repMsg}" : "Servicing prerequisites verified healthy.");
 
+                    case "SET_CONSERVATIVE_PROFILE":
+                        return (true, "Balanced concurrency recommended for constrained hardware; no unsafe system modifications performed.");
+
+                    case "NONE":
+                    case "":
+                        return (false, $"Recommendation '{rec.Title}' requires manual reboot or user action and cannot be auto-applied.");
+
                     default:
-                        return (true, $"Recommendation acknowledged: {rec.Title}");
+                        return (false, $"Unsupported health recommendation action '{rec.ActionId}'.");
                 }
             }
             catch (Exception ex)

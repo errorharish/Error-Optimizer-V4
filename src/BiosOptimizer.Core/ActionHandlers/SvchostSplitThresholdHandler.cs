@@ -14,21 +14,27 @@ public class SvchostSplitThresholdHandler : IActionHandler
     private readonly Dictionary<long, uint> _authoritativeMapping = new()
     {
         // 4 GB
-        { 4L * 1024 * 1024 * 1024, 0x4000000 },
+        { 4L * 1024 * 1024 * 1024, 0x00400000 },
         // 6 GB
-        { 6L * 1024 * 1024 * 1024, 0x600000 },
+        { 6L * 1024 * 1024 * 1024, 0x00600000 },
         // 8 GB
-        { 8L * 1024 * 1024 * 1024, 0x800000 },
+        { 8L * 1024 * 1024 * 1024, 0x00800000 },
         // 12 GB
-        { 12L * 1024 * 1024 * 1024, 0xC00000 },
+        { 12L * 1024 * 1024 * 1024, 0x00C00000 },
         // 16 GB
-        { 16L * 1024 * 1024 * 1024, 0x1000000 },
+        { 16L * 1024 * 1024 * 1024, 0x01000000 },
         // 24 GB
-        { 24L * 1024 * 1024 * 1024, 0x1800000 },
+        { 24L * 1024 * 1024 * 1024, 0x01800000 },
         // 32 GB
-        { 32L * 1024 * 1024 * 1024, 0x2000000 },
+        { 32L * 1024 * 1024 * 1024, 0x02000000 },
+        // 48 GB
+        { 48L * 1024 * 1024 * 1024, 0x03000000 },
         // 64 GB
-        { 64L * 1024 * 1024 * 1024, 0x4000000 }
+        { 64L * 1024 * 1024 * 1024, 0x04000000 },
+        // 96 GB
+        { 96L * 1024 * 1024 * 1024, 0x06000000 },
+        // 128 GB
+        { 128L * 1024 * 1024 * 1024, 0x08000000 }
     };
 
     public TargetState CheckAvailability(OptimizationEntry entry, EnvironmentContext context)
@@ -92,22 +98,22 @@ public class SvchostSplitThresholdHandler : IActionHandler
             using var key = Registry.LocalMachine.CreateSubKey(TargetKey);
             if (key != null)
             {
-                // Capture before state into Universal Backup Manager
-                try
+                // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+                var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
+                    entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+                    "Svchost Split Threshold",
+                    "HKLM",
+                    TargetKey,
+                    ValueName,
+                    currentValueStr,
+                    "DWord",
+                    $"0x{val:X}",
+                    "SAFE"
+                );
+                if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
                 {
-                    BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
-                        "Manual",
-                        "Svchost Split Threshold",
-                        "HKLM",
-                        TargetKey,
-                        ValueName,
-                        currentValueStr,
-                        "DWord",
-                        $"0x{val:X}",
-                        "SAFE"
-                    );
+                    return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = bkErr };
                 }
-                catch { }
 
                 key.SetValue(ValueName, unchecked((int)val), RegistryValueKind.DWord);
                 

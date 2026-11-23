@@ -5,28 +5,28 @@ namespace BiosOptimizer.Core.Models
 {
     public class DetailedGpuInfo
     {
-        public string Name { get; set; } = "Graphics Adapter";
-        public string Vendor { get; set; } = "GPU Vendor";
+        public string Name { get; set; } = "Unavailable";
+        public string Vendor { get; set; } = "Unavailable";
         public string DeviceId { get; set; } = "";
-        public string AdapterType { get; set; } = "DEDICATED GPU"; // "INTEGRATED GPU" / "DEDICATED GPU"
+        public string AdapterType { get; set; } = "Unknown"; // "INTEGRATED GPU" / "DEDICATED GPU"
         public string DedicatedVramText { get; set; } = "N/A";
         public string SharedMemoryText { get; set; } = "Dynamic";
         public string ReservedMemoryText { get; set; } = "";
         public string MemorySource { get; set; } = "DXGI 1.1 Hardware Adapter API";
-        public long DedicatedBytes { get; set; } = 0;
-        public long SharedBytes { get; set; } = 0;
-        public long ReservedBytes { get; set; } = 0;
+        public long DedicatedBytes { get; set; }
+        public long SharedBytes { get; set; }
+        public long ReservedBytes { get; set; }
         public string VramText { get => DedicatedVramText; set => DedicatedVramText = value; }
-        public string DriverVersion { get; set; } = "Standard";
+        public string DriverVersion { get; set; } = "Unavailable";
         public string DriverDate { get; set; } = "";
         public string DirectXVersion { get; set; } = "DirectX 12";
         public string FeatureLevel { get; set; } = "12_1";
-        public string WddmVersion { get; set; } = "WDDM 3.1";
-        public string Resolution { get; set; } = "1920 x 1080";
-        public string RefreshRate { get; set; } = "60 Hz";
-        public string HagsStatus { get; set; } = "Supported";
-        public bool IsPrimary { get; set; } = true;
-        public string StatusBadge { get; set; } = "ACTIVE";
+        public string WddmVersion { get; set; } = "Unavailable";
+        public string Resolution { get; set; } = "Unavailable";
+        public string RefreshRate { get; set; } = "Unavailable";
+        public string HagsStatus { get; set; } = "Unavailable";
+        public bool IsPrimary { get; set; }
+        public string StatusBadge { get; set; } = "UNAVAILABLE";
     }
 
     public class DetailedCpuInfo
@@ -141,88 +141,88 @@ namespace BiosOptimizer.Core.Models
 
     public class DetailedSecurityInfo
     {
-        public string SecureBootStatus { get; set; } = "GOOD";
-        public string SecureBootDetail { get; set; } = "LOADING...";
+        public string SecureBootStatus { get; set; } = "UNKNOWN";
+        public string SecureBootDetail { get; set; } = "Unavailable";
 
-        public string TpmStatus { get; set; } = "GOOD";
-        public string TpmDetail { get; set; } = "TPM 2.0 Active & Ready";
+        public string TpmStatus { get; set; } = "UNKNOWN";
+        public string TpmDetail { get; set; } = "Unavailable";
 
-        public string DefenderStatus { get; set; } = "GOOD";
-        public string DefenderDetail { get; set; } = "Microsoft Defender Active";
+        public string DefenderStatus { get; set; } = "UNKNOWN";
+        public string DefenderDetail { get; set; } = "Unavailable";
 
-        public string RealtimeProtection { get; set; } = "GOOD";
-        public string RealtimeDetail { get; set; } = "Real-time Protection Enabled";
+        public string RealtimeProtection { get; set; } = "UNKNOWN";
+        public string RealtimeDetail { get; set; } = "Unavailable";
 
-        public string FirewallStatus { get; set; } = "GOOD";
-        public string FirewallDetail { get; set; } = "Windows Firewall Active";
+        public string FirewallStatus { get; set; } = "UNKNOWN";
+        public string FirewallDetail { get; set; } = "Unavailable";
 
-        public string SmartScreenStatus { get; set; } = "GOOD";
-        public string SmartScreenDetail { get; set; } = "SmartScreen Filter Enabled";
+        public string SmartScreenStatus { get; set; } = "UNKNOWN";
+        public string SmartScreenDetail { get; set; } = "Unavailable";
 
-        public string CoreIsolationHvci { get; set; } = "GOOD";
-        public string CoreIsolationDetail { get; set; } = "Memory Integrity Active";
+        public string CoreIsolationHvci { get; set; } = "UNKNOWN";
+        public string CoreIsolationDetail { get; set; } = "Unavailable";
 
-        public string VbsStatus { get; set; } = "GOOD";
-        public string VbsDetail { get; set; } = "Virtualization-Based Security Active";
+        public string VbsStatus { get; set; } = "UNKNOWN";
+        public string VbsDetail { get; set; } = "Unavailable";
 
-        public string UacStatus { get; set; } = "GOOD";
-        public string UacDetail { get; set; } = "User Account Control Enabled";
+        public string UacStatus { get; set; } = "UNKNOWN";
+        public string UacDetail { get; set; } = "Unavailable";
     }
 
     public class DisplayMonitorInfo
     {
-        public string Name { get; set; } = "Internal Display";
-        public string Resolution { get; set; } = "1920 x 1080";
-        public string RefreshRate { get; set; } = "144 Hz";
-        public bool IsPrimary { get; set; } = true;
-        public string HdrStatus { get; set; } = "Supported (SDR Active)";
+        public string Name { get; set; } = "Display";
+        public string Resolution { get; set; } = "Unavailable";
+        public string RefreshRate { get; set; } = "Unavailable";
+        public bool IsPrimary { get; set; }
+        public string HdrStatus { get; set; } = "Unknown";
     }
 
     public class DetailedGraphicsDiagnostics
     {
-        public string DirectXVersion { get; set; } = "DirectX 12 Ultimate";
-        public string WddmVersion { get; set; } = "WDDM 3.1";
-        public string FeatureLevels { get; set; } = "12_2, 12_1, 12_0, 11_1";
-        public string HagsStatus { get; set; } = "Enabled (HAGS Active)";
-        public string GpuScheduling { get; set; } = "Hardware Accelerated Scheduling Ready";
-        public string HybridGraphics { get; set; } = "Advanced Optimus / MUX Ready";
-        public int DisplayCount { get; set; } = 1;
+        public string DirectXVersion { get; set; } = "DirectX 12";
+        public string WddmVersion { get; set; } = "Unavailable";
+        public string FeatureLevels { get; set; } = "Unavailable";
+        public string HagsStatus { get; set; } = "Unavailable";
+        public string GpuScheduling { get; set; } = "Unavailable";
+        public string HybridGraphics { get; set; } = "Unavailable";
+        public int DisplayCount { get; set; }
         public List<DisplayMonitorInfo> Displays { get; set; } = new();
     }
 
     public class DetailedPowerInfo
     {
-        public bool IsLaptop { get; set; } = true;
-        public bool HasBattery { get; set; } = true;
-        public bool AcConnected { get; set; } = true;
+        public bool IsLaptop { get; set; }
+        public bool HasBattery { get; set; }
+        public bool AcConnected { get; set; }
         public string PowerSourceText => AcConnected ? "AC Power Connected" : "Running on Battery";
-        public int BatteryPercentage { get; set; } = 90;
-        public string BatteryStatus { get; set; } = "Discharging";
+        public int BatteryPercentage { get; set; }
+        public string BatteryStatus { get; set; } = "Unknown";
         public string DesignCapacity { get; set; } = "NOT AVAILABLE";
         public string FullChargeCapacity { get; set; } = "NOT AVAILABLE";
-        public string BatteryHealth { get; set; } = "GOOD (95% Design Capacity)";
-        public string PowerPlan { get; set; } = "Balanced";
+        public string BatteryHealth { get; set; } = "Unavailable";
+        public string PowerPlan { get; set; } = "Unknown";
     }
 
     public class DetailedNetworkInfo
     {
-        public string ActiveAdapterName { get; set; } = "Wi-Fi / Ethernet";
-        public string ConnectionType { get; set; } = "Wireless (802.11ax)";
-        public string LinkSpeed { get; set; } = "866 Mbps";
-        public string Ipv4Address { get; set; } = "192.168.1.100";
-        public string Gateway { get; set; } = "192.168.1.1";
-        public string Dns { get; set; } = "1.1.1.1 / 8.8.8.8";
-        public string Status { get; set; } = "Connected (Internet Access)";
+        public string ActiveAdapterName { get; set; } = "Unavailable";
+        public string ConnectionType { get; set; } = "Unavailable";
+        public string LinkSpeed { get; set; } = "Unavailable";
+        public string Ipv4Address { get; set; } = "Unavailable";
+        public string Gateway { get; set; } = "Unavailable";
+        public string Dns { get; set; } = "Unavailable";
+        public string Status { get; set; } = "Disconnected";
     }
 
     public class DriverItemInfo
     {
-        public string Category { get; set; } = "GPU";
-        public string DeviceName { get; set; } = "NVIDIA GeForce RTX 4050 Laptop GPU";
-        public string DriverVersion { get; set; } = "32.0.15.8186";
-        public string DriverDate { get; set; } = "2025-11-12";
-        public string Provider { get; set; } = "NVIDIA";
-        public string Status { get; set; } = "HEALTHY";
+        public string Category { get; set; } = "Driver";
+        public string DeviceName { get; set; } = "Unavailable";
+        public string DriverVersion { get; set; } = "Unavailable";
+        public string DriverDate { get; set; } = "Unavailable";
+        public string Provider { get; set; } = "Unknown";
+        public string Status { get; set; } = "UNKNOWN";
     }
 
     public class DetailedDriverInfo

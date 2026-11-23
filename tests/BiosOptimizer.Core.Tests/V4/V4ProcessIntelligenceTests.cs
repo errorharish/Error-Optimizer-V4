@@ -46,5 +46,46 @@ namespace BiosOptimizer.Core.Tests.V4
                 }
             }
         }
+
+        [Fact]
+        public void ProtectedProcessPolicy_ShieldsExistingUserApplications()
+        {
+            var policy = new ProtectedProcessPolicy();
+
+            string[] userApps = new[]
+            {
+                "chrome", "msedge", "firefox", "brave", "opera", "discord", "slack", "teams",
+                "steam", "obs64", "resolve", "blender", "photoshop", "bluestacks", "hd-player"
+            };
+
+            foreach (var app in userApps)
+            {
+                var identity = new ProcessIdentityDto
+                {
+                    ProcessId = 12345,
+                    ProcessName = app,
+                    HasVisibleWindow = false,
+                    IsForeground = false
+                };
+
+                bool isProtected = policy.IsProcessProtected(identity, false, false);
+                Assert.True(isProtected, $"User app '{app}' must be protected under the Existing-App Rule");
+            }
+        }
+
+        [Fact]
+        public void ProtectedProcessPolicy_IdentifiesStrictlyProtectedServices()
+        {
+            Assert.True(ProtectedProcessPolicy.IsStrictlyProtectedService("WinDefend"));
+            Assert.True(ProtectedProcessPolicy.IsStrictlyProtectedService("RpcSs"));
+            Assert.True(ProtectedProcessPolicy.IsStrictlyProtectedService("AudioSrv"));
+            Assert.True(ProtectedProcessPolicy.IsStrictlyProtectedService("nvcontainer"));
+            Assert.True(ProtectedProcessPolicy.IsStrictlyProtectedService("EasyAntiCheat"));
+
+            Assert.False(ProtectedProcessPolicy.IsStrictlyProtectedService("DiagTrack"));
+            Assert.False(ProtectedProcessPolicy.IsStrictlyProtectedService("dmwappushservice"));
+            Assert.False(ProtectedProcessPolicy.IsStrictlyProtectedService("MapsBroker"));
+            Assert.False(ProtectedProcessPolicy.IsStrictlyProtectedService("LGHUBUpdaterService"));
+        }
     }
 }

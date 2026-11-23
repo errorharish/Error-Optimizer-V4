@@ -56,33 +56,32 @@ public class AsusProvider : IBiosProvider
         var capabilities = new List<BiosCapability>();
         if (GetProviderInfo().Status != "Available") return capabilities;
 
-        // Mock known Asus capabilities for safe settings
-        capabilities.Add(new BiosCapability
+        // Authoritative capability enumeration: Only expose capabilities if ACPI evaluator is genuinely reachable
+        if (_acpiEvaluator.IsAvailable())
         {
-            SettingId = "FastBoot",
-            DisplayName = "Fast Boot",
-            Provider = "ASUS",
-            Supported = true,
-            Writable = true,
-            CurrentValue = "Enabled", // normally read via ACPI/WMI
-            AllowedValues = new List<string> { "Enabled", "Disabled" },
-            RiskLevel = "Low",
-            RequiresReboot = true
-        });
+            try
+            {
+                var fastBootVal = _acpiEvaluator.EvaluateMethod("GET_FastBoot", string.Empty);
+                if (!string.IsNullOrWhiteSpace(fastBootVal))
+                {
+                    capabilities.Add(new BiosCapability
+                    {
+                        SettingId = "FastBoot",
+                        DisplayName = "Fast Boot",
+                        Provider = "ASUS",
+                        Supported = true,
+                        Writable = true,
+                        CurrentValue = fastBootVal.Trim(),
+                        AllowedValues = new List<string> { "Enabled", "Disabled" },
+                        RiskLevel = "Low",
+                        RequiresReboot = true
+                    });
+                }
+            }
+            catch { }
+        }
 
-        capabilities.Add(new BiosCapability
-        {
-            SettingId = "ErP",
-            DisplayName = "ErP Ready",
-            Provider = "ASUS",
-            Supported = true,
-            Writable = true,
-            CurrentValue = "Disabled",
-            AllowedValues = new List<string> { "Disabled", "Enable(S4+S5)", "Enable(S5)" },
-            RiskLevel = "Medium",
-            RequiresReboot = true
-        });
-
+        // Never fabricate fake mock capabilities when firmware control interfaces are absent
         return capabilities;
     }
 
@@ -110,8 +109,13 @@ public class AsusProvider : IBiosProvider
 
     public bool VerifySetting(string settingId, string expectedValue)
     {
-        // Actually we would read back from ACPI
-        return true;
+        if (_acpiEvaluator.IsAvailable())
+        {
+            var current = _acpiEvaluator.EvaluateMethod($"GET_{settingId}", string.Empty);
+            if (!string.IsNullOrWhiteSpace(current))
+                return current.Trim().Equals(expectedValue?.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
     }
 
     private bool IsForbidden(string settingId)

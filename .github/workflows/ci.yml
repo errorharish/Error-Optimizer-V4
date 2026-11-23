@@ -1,0 +1,67 @@
+name: CI Build & Verification
+
+on:
+  push:
+    branches: [ main, v4-maximum-performance, release/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Solution
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: prototype_standalone/frontend/package-lock.json
+
+      - name: Verify Protected Stylesheet Integrity
+        shell: pwsh
+        run: |
+          $expected = "A084E5C423A4940A69696EF5DAB00F699B06D05C148DADC1E9778FB3E0A61F88"
+          $cssPath = "prototype_standalone/frontend/src/styles.css"
+          if (-not (Test-Path $cssPath)) {
+            Write-Error "Protected stylesheet not found at $cssPath!"
+            exit 1
+          }
+          $actual = (Get-FileHash -Path $cssPath -Algorithm SHA256).Hash.ToUpperInvariant()
+          if ($actual -ne $expected) {
+            Write-Error "Protected stylesheet SHA-256 mismatch! Expected: $expected, Actual: $actual"
+            exit 1
+          }
+          Write-Host "Protected stylesheet SHA-256 verified: $actual" -ForegroundColor Green
+
+      - name: Install Frontend Dependencies
+        working-directory: prototype_standalone/frontend
+        run: npm ci
+
+      - name: Build Frontend SPA (Vite)
+        working-directory: prototype_standalone/frontend
+        run: npm run build:spa
+
+      - name: Restore Backend Solution
+        run: dotnet restore BiosOptimizer.sln
+
+      - name: Build Backend Solution (Release)
+        run: dotnet build BiosOptimizer.sln -c Release --no-restore
+
+      - name: Build WPF Desktop Host (Release)
+        run: dotnet build prototype_standalone/host/PrototypeHost.csproj -c Release
+
+      - name: Run SafetyKernel Unit Tests
+        run: dotnet test tests/BiosOptimizer.Safety.Tests/BiosOptimizer.Safety.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Run Detection Unit Tests
+        run: dotnet test tests/BiosOptimizer.Detection.Tests/BiosOptimizer.Detection.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"

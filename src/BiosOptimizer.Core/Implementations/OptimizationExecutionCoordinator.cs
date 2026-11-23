@@ -48,6 +48,20 @@ namespace BiosOptimizer.Core.Implementations
                    st == OptimizationOperationState.Verifying;
         }
 
+        public bool IsAnyCategoryBusy()
+        {
+            foreach (var kvp in _categoryStates)
+            {
+                if (kvp.Value == OptimizationOperationState.Queued ||
+                    kvp.Value == OptimizationOperationState.Running ||
+                    kvp.Value == OptimizationOperationState.Verifying)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public async Task<OptimizationExecutionContext> ExecuteAsync(
             string operationName,
             OptimizationCategory category,

@@ -1,0 +1,69 @@
+{
+  "shared": {
+    "never_write": [
+      "bst.root",
+      "bst.instance.*.root",
+      "bst.instance.*.guid",
+      "bst.machine_id",
+      "bst.user_id",
+      "bst.account_id"
+    ]
+  },
+  "MSIAppPlayer5": {
+    "5.20-5.21": {
+      "allowed": [
+        "bst.feature.*",
+        "bst.instance.*"
+      ],
+      "rejected": []
+    },
+    "5.22-5.23": {
+      "allowed": [
+        "bst.instance.*.fps",
+        "bst.instance.*.max_fps",
+        "bst.instance.*.enable_high_fps",
+        "bst.instance.*.cpus",
+        "bst.instance.*.ram",
+        "bst.instance.*.fb_width",
+        "bst.instance.*.fb_height",
+        "bst.instance.*.fb_depth",
+        "bst.instance.*.display_density",
+        "bst.instance.*.vsync",
+        "bst.instance.*.enable_vsync",
+        "bst.instance.*.gl_renderer",
+        "bst.feature.fps"
+      ],
+      "rejected": [
+        "bst.instance.*.astc_decoding",
+        "bst.instance.*.astc_decode",
+        "bst.instance.*.engine_mode",
+        "bst.instance.*.gl_mode",
+        "bst.instance.*.gpu_preference",
+        "bst.instance.*.gpu_preferences",
+        "bst.instance.*.hardware_decode",
+        "bst.instance.*.swap_interval",
+        "bst.instance.*.present_mode",
+        "bst.instance.*.frame_pacing",
+        "bst.instance.*.triple_buffering",
+        "bst.instance.*.fps_limit_type",
+        "bst.instance.*.enable_fps_limiter",
+        "bst.instance.*.gpu_workarounds",
+        "bst.instance.*.display_refresh_rate",
+        "max_fps",
+        "astc_decode",
+        "engine_mode",
+        "gl_mode",
+        "gpu_preferences",
+        "hardware_decode",
+        "swap_interval",
+        "present_mode",
+        "frame_pacing",
+        "triple_buffering",
+        "fps_limit_type",
+        "enable_fps_limiter",
+        "gpu_workarounds",
+        "display_refresh_rate"
+      ]
+    }
+  }
+}

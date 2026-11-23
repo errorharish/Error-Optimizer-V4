@@ -19,15 +19,25 @@ namespace BiosOptimizer.Core.Interfaces
         public string Name { get; set; } = "Display Adapter";
         public DetectedGpuVendor Vendor { get; set; } = DetectedGpuVendor.Unknown;
         public string VendorName { get; set; } = "Unknown";
-        public string DriverVersion { get; set; } = "Unknown";
-        public string DriverDate { get; set; } = "Unknown";
+        public string DriverVersion { get; set; } = "Unavailable";
+        public string DriverDate { get; set; } = "Unavailable";
         public string DeviceId { get; set; } = "";
+        public uint VendorId { get; set; }
+        public uint PciDeviceId { get; set; }
         public string RegistryClassKey { get; set; } = "";
         public double VramGb { get; set; }
-        public string WddmVersion { get; set; } = "WDDM 3.0+";
+        public double SharedVramGb { get; set; }
+        public string VramFormatted { get; set; } = "Unavailable";
+        public string WddmVersion { get; set; } = "Unavailable";
         public bool IsDiscrete { get; set; }
         public bool IsPrimary { get; set; }
         public bool SupportsHags { get; set; }
+        public string HagsDiagnosticReason { get; set; } = "";
+        public bool IsNvidiaRtx { get; set; }
+        public bool IsAmdRadeonRx { get; set; }
+        public bool IsIntelArc { get; set; }
+        public bool SupportsDirectX12Ultimate { get; set; }
+        public bool SupportsVrr { get; set; }
     }
 
     public class CpuHardwareSnapshot
@@ -37,16 +47,64 @@ namespace BiosOptimizer.Core.Interfaces
         public int PhysicalCores { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
         public double BaseFrequencyGhz { get; set; }
         public string Architecture { get; set; } = "x64";
+        public bool IsIntel { get; set; }
+        public bool IsAmd { get; set; }
+        public bool IsHybridCpu { get; set; }
+        public bool IsAmd3DVcache { get; set; }
+        public bool IsAmdRyzenAi { get; set; }
+        public int PerformanceCores { get; set; }
+        public int EfficientCores { get; set; }
+        public bool IsDualCcdAmd3DVcache { get; set; }
+        public int L3CacheInstanceCount { get; set; } = 1;
+        public List<long> L3CacheSizesBytes { get; set; } = new();
+        public bool SupportsCpuSets { get; set; }
+        public bool HasThreadDirectorSupport { get; set; }
+        public int ProcessorGroupCount { get; set; } = 1;
+        public int NumaNodeCount { get; set; } = 1;
+    }
+
+    public class StorageHardwareSnapshot
+    {
+        public bool HasNvmeDrive { get; set; } = true;
+        public bool HasSataSsd { get; set; }
+        public bool HasHdd { get; set; }
+        public bool SystemDriveIsNvme { get; set; } = true;
+        public bool IsTrimEnabled { get; set; } = true;
+        public string SystemDriveType { get; set; } = "NVMe SSD";
+        public string PrimaryDriveInterface { get; set; } = "NVMe / PCIe";
+    }
+
+    public class FirmwareHardwareSnapshot
+    {
+        public bool IsUefi { get; set; } = true;
+        public string SecureBootState { get; set; } = "Enabled";
+        public string TpmVersion { get; set; } = "2.0";
+        public bool VirtualizationFirmwareEnabled { get; set; } = true;
+        public bool IommuDmaProtectionEnabled { get; set; } = true;
+        public bool ResizableBarSupported { get; set; } = true;
+        public bool Above4GDecodingEnabled { get; set; } = true;
+        public string OemVendor { get; set; } = "Universal";
     }
 
     public class MemoryHardwareSnapshot
     {
-        public double InstalledPhysicalGb { get; set; } = 8.0;
-        public double UsablePhysicalGb { get; set; } = 8.0;
-        public double AvailablePhysicalGb { get; set; } = 4.0;
-        public double LoadPercentage { get; set; } = 50.0;
-        public string InstalledFormatted => $"{InstalledPhysicalGb:F1} GB";
-        public string UsableFormatted => $"{UsablePhysicalGb:F1} GB";
+        public double InstalledPhysicalGb { get; set; }
+        public double UsablePhysicalGb { get; set; }
+        public double HardwareReservedGb { get; set; }
+        public double AvailablePhysicalGb { get; set; }
+        public double UsedPhysicalGb { get; set; }
+        public double LoadPercentage { get; set; }
+        public double CommitUsedGb { get; set; }
+        public double CommitLimitGb { get; set; }
+        public double CommitPercentage { get; set; }
+        public int SpeedMhz { get; set; }
+        public string MemoryType { get; set; } = "Unknown";
+        public int DimmCount { get; set; }
+        public int TotalSlots { get; set; }
+        public string ChannelMode { get; set; } = "Unknown";
+        public string SpecFormatted { get; set; } = "System Memory";
+        public string InstalledFormatted => InstalledPhysicalGb > 0 ? $"{InstalledPhysicalGb:F1} GB" : "Unavailable";
+        public string UsableFormatted => UsablePhysicalGb > 0 ? $"{UsablePhysicalGb:F1} GB" : "Unavailable";
     }
 
     public class WindowsEnvironmentSnapshot
@@ -80,6 +138,8 @@ namespace BiosOptimizer.Core.Interfaces
         public CpuHardwareSnapshot Cpu { get; set; } = new();
         public MemoryHardwareSnapshot Memory { get; set; } = new();
         public List<GpuDeviceSnapshot> Gpus { get; set; } = new();
+        public StorageHardwareSnapshot Storage { get; set; } = new();
+        public FirmwareHardwareSnapshot Firmware { get; set; } = new();
         public WindowsEnvironmentSnapshot Windows { get; set; } = new();
         
         public bool IsLaptop { get; set; }
@@ -93,6 +153,9 @@ namespace BiosOptimizer.Core.Interfaces
         public bool HasAmd => Gpus.Exists(g => g.Vendor == DetectedGpuVendor.Amd);
         public bool HasIntel => Gpus.Exists(g => g.Vendor == DetectedGpuVendor.Intel);
         public bool IsHybridGpu => Gpus.Count > 1;
+        public bool HasDiscreteGpu => Gpus.Exists(g => g.IsDiscrete);
+        public bool HasTouchScreen { get; set; }
+        public bool HasAudioDevice { get; set; } = true;
     }
 
     public interface IHardwareDetectionService

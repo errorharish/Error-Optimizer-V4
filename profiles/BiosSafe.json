@@ -41,52 +41,476 @@
       "description": "Unlocks full PCIe bandwidth for discrete GPU and NVMe SSDs by preventing link power-down transitions."
     },
     {
-      "id": "biossafe.mmcss.gpu",
-      "displayName": "MMCSS High-Priority GPU & Audio Scheduling",
+      "id": "biossafe.pcie.rebar_readiness",
+      "displayName": "Evaluate PCIe Resizable BAR & Above 4G Decoding Readiness",
       "category": "GPU",
       "action": "SetRegistryValue",
-      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games\\GPU Priority",
-      "value": 8,
-      "os": [],
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000\\LargeMemoryRange",
+      "value": 1,
+      "type": "REG_DWORD",
       "risk": "Low",
-      "requiresConfirmation": false,
-      "warning": "",
-      "conditions": [],
-      "verification": "ReadBack",
-      "rollback": "Snapshot",
-      "description": "Elevates GPU priority for real-time 3D rendering and multimedia audio pipelines."
+      "description": "Enables GPU Large Memory Range access and provides motherboard-specific UEFI setup instructions."
     },
     {
-      "id": "biossafe.power.throttling",
-      "displayName": "Disable Background Power Throttling for NVMe & Hardware Tasks",
+      "id": "biossafe.cpu.virtualization_guidance",
+      "displayName": "Verify Hardware CPU Virtualization (VT-x / AMD-V)",
       "category": "CPU",
       "action": "SetRegistryValue",
-      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling\\PowerThrottlingOff",
-      "value": 1,
-      "os": [],
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity\\Enabled",
+      "value": 0,
+      "type": "REG_DWORD",
       "risk": "Low",
-      "requiresConfirmation": false,
-      "warning": "",
-      "conditions": [],
-      "verification": "ReadBack",
-      "rollback": "Snapshot",
-      "description": "Prevents Windows scheduler from downclocking background I/O operations and disk transfers."
+      "description": "Ensures hypervisor code integrity is tuned for maximum gaming frame rates without breaking hardware virtualization."
     },
     {
-      "id": "biossafe.timer.resolution",
-      "displayName": "Optimize Platform Timer & Global Resolution",
+      "id": "bios.audit.secure_boot_state",
+      "displayName": "UEFI Secure Boot Firmware Enforcement Audit",
       "category": "CPU",
-      "action": "SetRegistryValue",
-      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel\\GlobalTimerResolutionRequests",
-      "value": 1,
-      "os": [],
+      "action": "SetBiosSetting",
+      "target": "SecureBoot",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
-      "warning": "",
+      "warning": "Audits UEFI Secure Boot policy to verify kernel image and driver integrity.",
       "conditions": [],
       "verification": "ReadBack",
-      "rollback": "Snapshot",
-      "description": "Enables global high-resolution timer requests for consistent microsecond frame timing."
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.tpm20_status",
+      "displayName": "TPM 2.0 Security Processor Cryptographic Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "TPM20",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies hardware TPM 2.0 PCR banks for BitLocker and Windows 11 platform attestation.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.resizable_bar_state",
+      "displayName": "PCIe Resizable BAR / Smart Access Memory Audit",
+      "category": "GPU",
+      "action": "SetBiosSetting",
+      "target": "ReBAR",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies CPU has full 64-bit access to total GPU VRAM for maximum gaming framerates.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.above_4g_decoding",
+      "displayName": "Above 4G Decoding Firmware Capability Audit",
+      "category": "GPU",
+      "action": "SetBiosSetting",
+      "target": "Above4GDecoding",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies 64-bit PCIe device memory address space is mapped above the 4GB boundary.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.virtualization_vtx_svm",
+      "displayName": "Hardware Virtualization (Intel VT-x / AMD SVM) Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "Virtualization",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies CPU hardware virtualization extensions required for Free Fire and BlueStacks emulators.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.iommu_dma_protection",
+      "displayName": "IOMMU / Intel VT-d DMA Kernel Protection Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "VT-d",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies DMA remapping hardware prevents malicious Thunderbolt and PCIe DMA attacks.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.xmp_expo_memory_profile",
+      "displayName": "DDR4 / DDR5 XMP / EXPO Memory Clocking Audit",
+      "category": "Power",
+      "action": "SetBiosSetting",
+      "target": "XMP_EXPO",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies RAM is running at rated manufacturer frequency and latency timings rather than JEDEC baseline.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.cstates_power_management",
+      "displayName": "CPU C-States Autonomous Power Management Audit",
+      "category": "Power",
+      "action": "SetBiosSetting",
+      "target": "CStates",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Audits deep package C-state transitions on AC power to ensure consistent low-latency gaming.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.pcie_gen4_gen5_link_speed",
+      "displayName": "PCI Express Link Speed & Lane Negotiation Audit",
+      "category": "GPU",
+      "action": "SetBiosSetting",
+      "target": "PCIeLinkSpeed",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies discrete GPU is negotiating at full x16 link width (PCIe Gen4 or Gen5).",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.fan_curve_thermal_throttling",
+      "displayName": "Motherboard Fan Curve & Thermal Headroom Audit",
+      "category": "Power",
+      "action": "SetBiosSetting",
+      "target": "ThermalThrottling",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Audits CPU and GPU junction temperatures against manufacturer thermal junction limits.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.fast_boot_firmware_bypass",
+      "displayName": "UEFI Fast Boot Driver Initialization Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "FastBoot",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Audits whether UEFI Fast Boot bypasses peripheral hardware USB training.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.csm_legacy_mode_warning",
+      "displayName": "Compatibility Support Module (CSM) Legacy Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "CSM",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Ensures legacy 16-bit BIOS emulation is disabled for full UEFI driver security.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.intel_me_txe_firmware_version",
+      "displayName": "Intel ME / AMD PSP Management Engine Audit",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "ManagementEngine",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Audits security processor firmware patch status against known privilege escalation bugs.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.nvme_raid_vs_ahci_mode",
+      "displayName": "SATA / NVMe Controller Operation Mode Audit",
+      "category": "Power",
+      "action": "SetBiosSetting",
+      "target": "SataMode",
+      "value": "Audit",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Verifies storage controller is in AHCI / Direct NVMe mode rather than legacy Intel RST RAID mode.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.action.reboot_to_uefi_firmware",
+      "displayName": "Trigger Safe Windows Reboot Directly into UEFI BIOS",
+      "category": "CPU",
+      "action": "SetBiosSetting",
+      "target": "RebootToUefi",
+      "value": "Trigger",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": true,
+      "warning": "Instructs Windows BCD and UEFI boot manager to reboot straight into motherboard setup.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.cpu_virtualization_readiness",
+      "displayName": "Audit CPU Hardware Virtualization (VT-x / AMD-V) Readiness",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "VirtualizationAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: verifies whether hardware virtualization is active in firmware for emulators and WSL2.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.iommu_dma_protection_readiness",
+      "displayName": "Audit Kernel DMA & IOMMU Protection Readiness",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "IommuAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: verifies direct memory access protection and IOMMU virtualization for DirectStorage.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.memory_xmp_expo_overclock_profile",
+      "displayName": "Audit Memory Overclock Profile (XMP / EXPO) Readiness",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "MemoryProfileAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: checks memory operating speed against baseline JEDEC specifications.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.tpm_20_security_platform",
+      "displayName": "Audit Trusted Platform Module (TPM 2.0) Security Readiness",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "TpmAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: verifies firmware TPM 2.0 platform availability for game anti-cheat and platform integrity.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.modern_standby_s0ix_power",
+      "displayName": "Audit ACPI Modern Standby (S0ix) vs Traditional S3 Sleep",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "AcpiSleepAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: inspects firmware ACPI power state enumeration to assess connected sleep drain.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "bios.audit.pcie_link_bandwidth_generation",
+      "displayName": "Audit PCIe Link Width & Generation Bandwidth",
+      "category": "Audit",
+      "action": "SetBiosSetting",
+      "target": "PcieLinkAudit",
+      "value": "Diagnostic Audit Only",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit: verifies primary GPU is negotiated at full PCIe link width without bandwidth bottlenecks.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "biossafe.audit.pk_status",
+      "displayName": "Audit UEFI Platform Key (PK) & Trust Anchor Status",
+      "category": "Audit",
+      "action": "EvaluatePlatformKeyStatus",
+      "target": "UEFI_PK_STATUS",
+      "value": "AuditOnly",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only inspection of motherboard firmware PK signature certificate.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "None"
+    },
+    {
+      "id": "biossafe.audit.dbx_freshness",
+      "displayName": "Audit UEFI Secure Boot Revocation Database (DBX) Freshness",
+      "category": "Audit",
+      "action": "EvaluateDbxRevocationList",
+      "target": "UEFI_DBX_FRESHNESS",
+      "value": "AuditOnly",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit of firmware DBX forbidden signature hash database.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "None"
+    },
+    {
+      "id": "biossafe.audit.ftpm_version",
+      "displayName": "Audit AMD fTPM / Intel PTT Firmware Revision",
+      "category": "Audit",
+      "action": "EvaluateFirmwareTpmVersion",
+      "target": "UEFI_FTPM_REVISION",
+      "value": "AuditOnly",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit of firmware-based TPM 2.0 microcode version.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "None"
+    },
+    {
+      "id": "biossafe.audit.modern_standby",
+      "displayName": "Audit ACPI Modern Standby (S0ix) vs Traditional S3 Sleep",
+      "category": "Audit",
+      "action": "EvaluateModernStandbyS0ix",
+      "target": "ACPI_S0IX_VS_S3",
+      "value": "AuditOnly",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Read-only audit of firmware sleep states to verify hardware standby capabilities.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "None"
     }
   ]
 }

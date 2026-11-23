@@ -27,6 +27,7 @@ namespace BiosOptimizer.Core.Interfaces
         public long WorkingSetBytes { get; set; }
         public bool IsStandbyCleanupSupported { get; set; }
         public bool IsLowPriorityStandbySupported { get; set; }
+        public bool IsNativeKernelQueried { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
         public string TotalFormatted => FormatBytes(TotalPhysicalBytes);

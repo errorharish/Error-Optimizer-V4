@@ -14,6 +14,9 @@ namespace BiosOptimizer.Core.Tests.V4
         public bool IsServiceAvailable => true;
         public IpcConnectionState ConnectionState => IpcConnectionState.Connected;
         public string ServiceBuildId => "1.0.0";
+        public bool IsOnline => IsServiceAvailable;
+        public string StatusText => "ONLINE";
+        public System.Windows.Media.Brush StatusBrush => System.Windows.Media.Brushes.LimeGreen;
 
         public event Action<bool>? ServiceAvailabilityChanged;
         public event Action<IpcConnectionState>? ConnectionStateChanged;
@@ -130,6 +133,29 @@ namespace BiosOptimizer.Core.Tests.V4
             Assert.Contains("Potentially Reducible Background Workload:", vm.DynamicReducibleWorkloadText);
             Assert.DoesNotContain("70–85", vm.SafeMinimumRangeText);
             Assert.DoesNotContain("safe floor estimate", vm.DynamicSafeOptimizationText, StringComparison.OrdinalIgnoreCase);
+        }
+        [Fact]
+        public void OptimizationCandidateItemModel_ProvidesPlainLanguageFields()
+        {
+            var item1 = new OptimizationCandidateItemModel
+            {
+                DisplayName = "Diagnostic Worker",
+                Category = "System"
+            };
+            Assert.Equal("System Performance", item1.CategoryGroup);
+            Assert.Contains("scheduling and input responsiveness", item1.PlainBenefit);
+            Assert.Contains("priority", item1.PotentialDrawback);
+            Assert.Equal("Reversible via Rollback Journal", item1.ReversibilityStatus);
+            Assert.Equal("Managed safely by background service", item1.AdminRequirement);
+
+            var item2 = new OptimizationCandidateItemModel
+            {
+                DisplayName = "Background Telemetry",
+                Category = "Overhead"
+            };
+            Assert.Equal("Background Workload", item2.CategoryGroup);
+            Assert.Contains("Reduces background CPU overhead", item2.PlainBenefit);
+            Assert.Contains("paused until restarted", item2.PotentialDrawback);
         }
     }
 }

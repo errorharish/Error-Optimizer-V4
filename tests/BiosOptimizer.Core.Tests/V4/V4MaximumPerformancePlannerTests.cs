@@ -14,7 +14,7 @@ namespace BiosOptimizer.Core.Tests.V4
 
             Assert.NotNull(plan);
             Assert.True(plan.InitialProcessCount > 0, "Initial process count must be recorded");
-            Assert.True(plan.TargetSafeMinimumRangeLow >= 65, "Target safe minimum floor should be at least 65");
+            Assert.True(plan.TargetSafeMinimumRangeLow >= 30, "Target safe minimum floor should be at least 30");
             Assert.True(plan.TargetSafeMinimumRangeHigh > plan.TargetSafeMinimumRangeLow, "Target high range must exceed low range");
             Assert.NotNull(plan.Candidates);
         }

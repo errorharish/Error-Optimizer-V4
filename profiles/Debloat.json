@@ -123,7 +123,7 @@
     },
     {
       "id": "debloat.feature.onedrive.startup",
-      "displayName": "Disable OneDrive Automatic Startup",
+      "displayName": "Disable OneDrive Background Sync (Preserves Local Files)",
       "category": "Windows Features",
       "action": "SetRegistryValue",
       "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\OneDrive\\DisableFileSyncNGSC",
@@ -134,15 +134,15 @@
       ],
       "risk": "Low",
       "requiresConfirmation": false,
-      "warning": "Prevents OneDrive from syncing in the background. Existing local files are preserved.",
+      "warning": "Prevents OneDrive from syncing in the background. Existing local files in %UserProfile%\\OneDrive are 100% preserved.",
       "conditions": [],
       "verification": "ReadBack",
       "rollback": "Snapshot",
-      "description": "Disables background OneDrive synchronization process without touching local user documents."
+      "description": "Disables background OneDrive file synchronization via policy without deleting or altering any existing local user documents."
     },
     {
       "id": "debloat.feature.cortana",
-      "displayName": "Disable Cortana Voice Assistant",
+      "displayName": "Disable Cortana Voice Assistant (Group Policy)",
       "category": "Windows Features",
       "action": "SetRegistryValue",
       "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search\\AllowCortana",
@@ -157,11 +157,11 @@
       "conditions": [],
       "verification": "ReadBack",
       "rollback": "Snapshot",
-      "description": "Disables Cortana background listening and indexing features."
+      "description": "Sets AllowCortana=0 in Windows Search policies to stop Cortana voice assistant background polling. Applicable on Windows 10/11 Pro and Enterprise editions."
     },
     {
       "id": "debloat.feature.widgets",
-      "displayName": "Disable Windows 11 Widgets & News Taskbar Icon",
+      "displayName": "Disable Windows 11 Widgets Feed & Taskbar Daemon",
       "category": "Windows Features",
       "action": "SetRegistryValue",
       "target": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDa",
@@ -175,11 +175,11 @@
       "conditions": [],
       "verification": "ReadBack",
       "rollback": "Snapshot",
-      "description": "Hides Windows 11 Widgets icon and suspends background news ticker feed processes."
+      "description": "Hides the Windows 11 Widgets taskbar icon (TaskbarDa=0) and suspends the background news ticker WebPlatform processes."
     },
     {
       "id": "debloat.feature.teams",
-      "displayName": "Disable Microsoft Teams / Chat Taskbar Integration",
+      "displayName": "Disable Windows 11 Taskbar Chat / Teams Integration",
       "category": "Windows Features",
       "action": "SetRegistryValue",
       "target": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarMn",
@@ -193,26 +193,7 @@
       "conditions": [],
       "verification": "ReadBack",
       "rollback": "Snapshot",
-      "description": "Removes Microsoft Teams Chat icon from Windows taskbar."
-    },
-    {
-      "id": "debloat.privacy.telemetry",
-      "displayName": "Set Windows Diagnostic Data to Security / Minimal",
-      "category": "Privacy",
-      "action": "SetRegistryValue",
-      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection\\AllowTelemetry",
-      "value": 0,
-      "os": [
-        "win10",
-        "win11"
-      ],
-      "risk": "Low",
-      "requiresConfirmation": false,
-      "warning": "",
-      "conditions": [],
-      "verification": "ReadBack",
-      "rollback": "Snapshot",
-      "description": "Restricts Windows Diagnostic Data transmission to essential security updates only."
+      "description": "Hides Microsoft Teams Chat icon from Windows taskbar (TaskbarMn=0) without removing or breaking the standalone Microsoft Teams desktop application."
     },
     {
       "id": "debloat.privacy.advertising",
@@ -251,25 +232,6 @@
       "verification": "ReadBack",
       "rollback": "Snapshot",
       "description": "Stops Windows from recording and synchronizing user task history to cloud accounts."
-    },
-    {
-      "id": "debloat.privacy.tailored",
-      "displayName": "Disable Tailored Experiences with Diagnostic Data",
-      "category": "Privacy",
-      "action": "SetRegistryValue",
-      "target": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy\\TailoredExperiencesWithDiagnosticDataEnabled",
-      "value": 0,
-      "os": [
-        "win10",
-        "win11"
-      ],
-      "risk": "Low",
-      "requiresConfirmation": false,
-      "warning": "",
-      "conditions": [],
-      "verification": "ReadBack",
-      "rollback": "Snapshot",
-      "description": "Disables personalized tips, ads, and Microsoft recommendations based on diagnostic metrics."
     },
     {
       "id": "debloat.registry.suggestions",
@@ -382,6 +344,684 @@
       "verification": "ReadBack",
       "rollback": "Snapshot",
       "description": "Moves the Start button and running applications to the classic left position."
+    },
+    {
+      "id": "debloat.appx.xbox_gamebar",
+      "displayName": "Surgically Remove Xbox Game Bar Overlay (Preserving Game Pass)",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.XboxGamingOverlay",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot",
+      "description": "Removes Xbox Gaming Overlay stutters while preserving Microsoft Gaming Services, Xbox Live auth, and Store games."
+    },
+    {
+      "id": "debloat.appx.disney_plus",
+      "displayName": "Remove Disney+ Pre-Installed Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Disney.37853FC22B2CE",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes pre-installed consumer streaming bloatware package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.prime_video",
+      "displayName": "Remove Amazon Prime Video Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "AmazonVideo.PrimeVideo",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes sponsored Amazon Prime Video package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.solitaire_collection",
+      "displayName": "Remove Microsoft Solitaire Collection Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.MicrosoftSolitaireCollection",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes ad-supported Microsoft Solitaire collection package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.skype",
+      "displayName": "Remove Skype Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.SkypeApp",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes deprecated consumer Skype application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.phone_link",
+      "displayName": "Remove Phone Link / Your Phone Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.YourPhone",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes background phone synchronization daemon for users who do not link mobile devices.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.feedback_hub",
+      "displayName": "Remove Windows Feedback Hub Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.WindowsFeedbackHub",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes Windows Feedback Hub application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.builder_3d",
+      "displayName": "Remove 3D Builder Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.3DBuilder",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes deprecated 3D Builder tool.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.mixed_reality",
+      "displayName": "Remove Mixed Reality Portal Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.MixedReality.Portal",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes deprecated Windows Mixed Reality portal package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.windows_maps",
+      "displayName": "Remove Windows Maps Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.WindowsMaps",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes offline Windows Maps application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.voice_recorder",
+      "displayName": "Remove Sound Recorder / Voice Recorder Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.WindowsSoundRecorder",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes standard sound recorder application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.quick_assist",
+      "displayName": "Remove Quick Assist Remote Help Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "MicrosoftCorporationII.QuickAssist",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes remote screen sharing support tool.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.get_started_tips",
+      "displayName": "Remove Windows Tips / Get Started Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.Getstarted",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes promotional onboarding tips application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.office_hub",
+      "displayName": "Remove Microsoft 365 / Office Hub Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.MicrosoftOfficeHub",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes promotional web launcher for Microsoft Office.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.todos",
+      "displayName": "Remove Microsoft To Do Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.Todos",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes cloud To-Do synchronization application.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.copilot_daemon_disable",
+      "displayName": "Disable Windows Copilot AI Taskbar Daemon",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot\\TurnOffWindowsCopilot",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables Copilot AI side panel and eliminates persistent edge background processes.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.recall_snapshots_disable",
+      "displayName": "Disable Windows Recall Periodic Snapshot Activity",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI\\DisableAIDataAnalysis",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents Windows 11 24H2/25H2 from capturing periodic desktop screen snapshots.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.news_interests_taskbar_disable",
+      "displayName": "Disable News & Interests Taskbar Widget Feed",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds\\ShellFeedsTaskbarViewMode",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables taskbar weather widget and halts msn news feed background polling.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.cortana",
+      "displayName": "Remove Cortana Background Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.549981C3F5F10",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls obsolete Cortana digital assistant Store package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.edge_background_extensions_disable",
+      "displayName": "Disable Edge Background Extensions Upon Exit",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge\\BackgroundModeEnabled",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Ensures all Edge browser processes terminate completely when the window is closed.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.privacy.advertising_id_systemwide_disable",
+      "displayName": "Disable Windows Diagnostic Advertising ID System-Wide",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo\\DisabledByGroupPolicy",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents applications from tracking user behavior across different programs.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.bing_weather",
+      "displayName": "Remove Bing Weather Live Tile & Telemetry Appx",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.BingWeather",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls Microsoft Bing Weather live tile consumer Store package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.privacy.cloud_sync_clipboard_history_disable",
+      "displayName": "Disable Cloud Synchronization of Clipboard History",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System\\AllowCrossDeviceClipboard",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Restricts copied clipboard text to local memory, preventing background cloud uploads.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.oem_support_assist_auto_telemetry_disable",
+      "displayName": "Disable OEM Diagnostic Upload Telemetry Daemons",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent\\DisableSoftLanding",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents OEM telemetry packages from receiving promotional push notifications.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.gamebar_overlay_disable_preserve_gamepass",
+      "displayName": "Disable Game Bar Background Overlay (Preserve Xbox Game Pass)",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR\\AppCaptureEnabled",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables Game Bar screen capture overlay without breaking Xbox app logins or PC Game Pass game launches.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.power_automate",
+      "displayName": "Remove Power Automate Desktop OEM Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.PowerAutomateDesktop",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls pre-installed Power Automate background tasks.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.zune_video",
+      "displayName": "Remove Movies & TV Pre-Installed UWP Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.ZuneVideo",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes legacy Windows Movies & TV UWP media player package.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.disney_plus_stub",
+      "displayName": "Remove Pre-installed Disney+ Stub",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "DisneyPlus",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls OEM pre-installed Disney+ promotional application stub.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.prime_video_stub",
+      "displayName": "Remove Pre-installed Amazon Prime Video Stub",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Amazon.AmazonPrimeVideo",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls OEM pre-installed Prime Video promotional application stub.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.people",
+      "displayName": "Remove People Contact Card Store Appx Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.People",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Uninstalls consumer People address book Store app.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.alarms",
+      "displayName": "Remove Windows Alarms & Clock Consumer Package",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.WindowsAlarms",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes default Windows Alarms and Clock UWP app.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.remote_assistance_disable",
+      "displayName": "Disable Legacy Windows Remote Assistance (MSRA)",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Remote Assistance\\fAllowToGetHelp",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables obsolete Windows Remote Assistance daemon to close unmonitored listening endpoints.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.feature.internet_explorer_engine_disable",
+      "displayName": "Disable Legacy Internet Explorer 11 Engine",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Internet Explorer\\Main\\NotifyDisableIEOptions",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enforces legacy IE11 engine retirement and redirect to modern Chromium runtime.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.get_help",
+      "displayName": "Remove Microsoft Get Help Pre-Installed Support App",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.GetHelp",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes pre-installed consumer Get Help diagnostic support app.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "debloat.appx.whiteboard",
+      "displayName": "Remove Microsoft Tips & Get Started App",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.Whiteboard",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Removes Microsoft Tips and promotional onboarding app.",
+      "conditions": [],
+      "verification": "PackageCheck",
+      "rollback": "None",
+      "name": "Microsoft Whiteboard Preinstalled"
+    },
+    {
+      "id": "debloat.appx.bingfinance",
+      "displayName": "Remove Windows Maps Consumer App",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.BingFinance",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Removes Windows Maps package and offline map downloading background hooks.",
+      "conditions": [],
+      "verification": "PackageCheck",
+      "rollback": "None",
+      "name": "Microsoft Bing Finance / Money"
+    },
+    {
+      "id": "debloat.appx.paint3d",
+      "displayName": "Remove PhoneLink Consumer Sync Daemon",
+      "category": "Bloatware",
+      "action": "RemoveAppxPackage",
+      "target": "Microsoft.Paint3D",
+      "value": "Removed",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Removes PhoneLink package and background smartphone synchronization process.",
+      "conditions": [],
+      "verification": "PackageCheck",
+      "rollback": "None",
+      "name": "Microsoft Paint 3D Deprecated App"
     }
   ]
 }

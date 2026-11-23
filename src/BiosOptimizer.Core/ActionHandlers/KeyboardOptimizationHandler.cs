@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using BiosOptimizer.Core.Interfaces;
 using BiosOptimizer.Core.Models;
@@ -9,6 +10,13 @@ public class KeyboardOptimizationHandler : IActionHandler
     public string ActionName => "SetKeyboardOptimization";
 
     private const string TargetKey = @"Control Panel\Keyboard";
+    private const uint SPI_SETKEYBOARDDELAY = 0x0017;
+    private const uint SPI_SETKEYBOARDSPEED = 0x000B;
+    private const uint SPIF_UPDATEINIFILE = 0x01;
+    private const uint SPIF_SENDCHANGE = 0x02;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
 
     public TargetState CheckAvailability(OptimizationEntry entry, EnvironmentContext context)
     {
@@ -17,51 +25,55 @@ public class KeyboardOptimizationHandler : IActionHandler
 
     public OptimizationResult Apply(OptimizationEntry entry)
     {
-        var currentValue = GetCurrentValueDisplay(entry);
-        if (currentValue == "Delay 0") // we set delay 0 and speed 31
-        {
-            return new OptimizationResult
-            {
-                Status = ResultStatus.AlreadyOptimized,
-                ItemId = "KeyboardSpeed",
-                DisplayName = "Keyboard Optimization already applied"
-            };
-        }
-
         try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(TargetKey);
+            var (k, _, _, _) = BiosOptimizer.Core.Implementations.RegistryTweakEngine.IsRunningAsSystem()
+                ? BiosOptimizer.Core.Implementations.RegistryTweakEngine.OpenTargetKeyWithPreflight("HKCU", TargetKey, writable: true)
+                : (null, Microsoft.Win32.RegistryView.Registry64, "", "");
+            using var key = k ?? Registry.CurrentUser.CreateSubKey(TargetKey);
             if (key != null)
             {
-                // Capture before state into Universal Backup Manager
-                try
+                var prevDelay = key.GetValue("KeyboardDelay")?.ToString() ?? "";
+                var prevSpeed = key.GetValue("KeyboardSpeed")?.ToString() ?? "";
+                if (prevDelay == "0" && prevSpeed == "31")
                 {
-                    var prevDelay = key.GetValue("KeyboardDelay")?.ToString() ?? "Unknown";
-                    var prevSpeed = key.GetValue("KeyboardSpeed")?.ToString() ?? "Unknown";
-                    BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureInputTweak(
-                        "Manual",
-                        "Keyboard Optimization",
-                        "HKCU\\Control Panel\\Keyboard",
-                        $"Delay={prevDelay},Speed={prevSpeed}",
-                        "Delay=0,Speed=31",
-                        "SAFE"
-                    );
+                    return new OptimizationResult
+                    {
+                        Status = ResultStatus.AlreadyOptimized,
+                        ItemId = "KeyboardSpeed",
+                        DisplayName = "Keyboard Optimization already applied"
+                    };
                 }
-                catch { }
 
-                // Standard optimal Windows keyboard delay/speed
+                var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureInputTweak(
+                    entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+                    "Keyboard Optimization",
+                    "HKCU\\Control Panel\\Keyboard",
+                    $"Delay={prevDelay},Speed={prevSpeed}",
+                    "Delay=0,Speed=31",
+                    "SAFE"
+                );
+                if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+                {
+                    return new OptimizationResult { Status = ResultStatus.Failed, ItemId = "KeyboardSpeed", DisplayName = entry.DisplayName, Message = bkErr };
+                }
+
                 key.SetValue("KeyboardDelay", "0", RegistryValueKind.String);
                 key.SetValue("KeyboardSpeed", "31", RegistryValueKind.String);
-                
-                var newValue = GetCurrentValueDisplay(entry);
-                if (newValue == "Delay 0")
+
+                bool spiDelay = SystemParametersInfo(SPI_SETKEYBOARDDELAY, 0, IntPtr.Zero, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                bool spiSpeed = SystemParametersInfo(SPI_SETKEYBOARDSPEED, 31, IntPtr.Zero, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+                var readDelay = key.GetValue("KeyboardDelay")?.ToString();
+                var readSpeed = key.GetValue("KeyboardSpeed")?.ToString();
+                if (readDelay == "0" && readSpeed == "31")
                 {
                     return new OptimizationResult
                     {
                         Status = ResultStatus.Success,
                         ItemId = "KeyboardSpeed",
                         DisplayName = "Optimized Keyboard Delay and Repeat Rate",
-                        
+                        Message = $"Verified KeyboardDelay=0, KeyboardSpeed=31 (SPI applied: delay={spiDelay}, speed={spiSpeed})."
                     };
                 }
             }
@@ -78,7 +90,10 @@ public class KeyboardOptimizationHandler : IActionHandler
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(TargetKey);
+            var (k, _, _, _) = BiosOptimizer.Core.Implementations.RegistryTweakEngine.IsRunningAsSystem()
+                ? BiosOptimizer.Core.Implementations.RegistryTweakEngine.OpenTargetKeyWithPreflight("HKCU", TargetKey, writable: false)
+                : (null, Microsoft.Win32.RegistryView.Registry64, "", "");
+            using var key = k ?? Registry.CurrentUser.OpenSubKey(TargetKey);
             if (key != null)
             {
                 var val = key.GetValue("KeyboardDelay");

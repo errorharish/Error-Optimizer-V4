@@ -17,7 +17,7 @@ namespace BiosOptimizer.GUI.Services
     public class GradientColorStop
     {
         public Color Color { get; set; }
-        public string Hex { get; set; } = "#00D4FF";
+        public string Hex { get; set; } = "#5E6AD2";
         public double Offset { get; set; } = 0.0;
 
         public GradientColorStop() { }
@@ -26,7 +26,7 @@ namespace BiosOptimizer.GUI.Services
         {
             Hex = hex;
             Offset = offset;
-            Color = ThemeBrushService.ParseColor(hex, Colors.Cyan);
+            Color = ThemeBrushService.ParseColor(hex, Color.FromRgb(0x5E, 0x6A, 0xD2));
         }
 
         public GradientColorStop(Color color, double offset)
@@ -50,7 +50,7 @@ namespace BiosOptimizer.GUI.Services
         public static ThemeBrushService Instance => _instance.Value;
 
         public ThemeMode CurrentThemeMode { get; private set; } = ThemeMode.Solid;
-        public Color CurrentAccentColor { get; private set; } = Color.FromRgb(0x00, 0xE5, 0xFF);
+        public Color CurrentAccentColor { get; private set; } = Color.FromRgb(0x5E, 0x6A, 0xD2); // Linear Indigo Accent
         public List<GradientColorStop> CurrentGradientStops { get; private set; } = new();
         public double CurrentGradientAngle { get; private set; } = 90.0;
         public string CurrentGradientDirection { get; private set; } = "LeftToRight";
@@ -68,10 +68,10 @@ namespace BiosOptimizer.GUI.Services
 
         private ThemeBrushService()
         {
-            // Default gradient stops (Cyber Blue: Cyan -> Blue -> Purple)
-            CurrentGradientStops.Add(new GradientColorStop("#00D4FF", 0.0));
-            CurrentGradientStops.Add(new GradientColorStop("#0051FF", 0.5));
-            CurrentGradientStops.Add(new GradientColorStop("#7A00FF", 1.0));
+            // Default gradient stops (Linear Indigo / Precision)
+            CurrentGradientStops.Add(new GradientColorStop("#5E6AD2", 0.0));
+            CurrentGradientStops.Add(new GradientColorStop("#4A56C4", 0.5));
+            CurrentGradientStops.Add(new GradientColorStop("#0D0D0F", 1.0));
         }
 
         /// <summary>
@@ -112,7 +112,7 @@ namespace BiosOptimizer.GUI.Services
 
         public void ApplyAccentColor(string hexColor)
         {
-            Color color = ParseColor(hexColor, Color.FromRgb(0x00, 0xE5, 0xFF));
+            Color color = ParseColor(hexColor, Color.FromRgb(0xCB, 0xD5, 0xE1));
             ApplyAccentColor(color);
         }
 
@@ -554,9 +554,9 @@ public Color GetColorAtOffset(double offset)
             var list = new List<GradientColorStop>();
             if (string.IsNullOrWhiteSpace(json))
             {
-                list.Add(new GradientColorStop("#00D4FF", 0.0));
-                list.Add(new GradientColorStop("#0051FF", 0.5));
-                list.Add(new GradientColorStop("#7A00FF", 1.0));
+                list.Add(new GradientColorStop("#5E6AD2", 0.0));
+                list.Add(new GradientColorStop("#4A56C4", 0.5));
+                list.Add(new GradientColorStop("#0D0D0F", 1.0));
                 return list;
             }
 
@@ -565,21 +565,21 @@ public Color GetColorAtOffset(double offset)
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
-                    string hex = el.TryGetProperty("Hex", out var h) ? h.GetString() ?? "#00D4FF" : "#00D4FF";
+                    string hex = el.TryGetProperty("Hex", out var h) ? h.GetString() ?? "#5E6AD2" : "#5E6AD2";
                     double offset = el.TryGetProperty("Offset", out var o) ? o.GetDouble() : 0.0;
                     list.Add(new GradientColorStop(hex, offset));
                 }
             }
             catch
             {
-                list.Add(new GradientColorStop("#00D4FF", 0.0));
-                list.Add(new GradientColorStop("#7A00FF", 1.0));
+                list.Add(new GradientColorStop("#5E6AD2", 0.0));
+                list.Add(new GradientColorStop("#0D0D0F", 1.0));
             }
 
             if (list.Count < 2)
             {
-                list.Add(new GradientColorStop("#00D4FF", 0.0));
-                list.Add(new GradientColorStop("#7A00FF", 1.0));
+                list.Add(new GradientColorStop("#5E6AD2", 0.0));
+                list.Add(new GradientColorStop("#0D0D0F", 1.0));
             }
 
             return list.OrderBy(s => s.Offset).ToList();

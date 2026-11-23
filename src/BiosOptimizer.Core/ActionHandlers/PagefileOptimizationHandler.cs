@@ -34,23 +34,23 @@ public class PagefileOptimizationHandler : IActionHandler
             };
         }
 
-        // Capture before state into Universal Backup Manager
-        try
+        // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureGenericTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            "pagefile.automatic_managed",
+            $"Pagefile Management \u2192 {targetValue}",
+            "Memory",
+            "WmiSetting",
+            $"AutomaticManagedPagefile: {currentValue}",
+            $"AutomaticManagedPagefile: {targetValue}",
+            "WmiSettingRestore",
+            true,
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureGenericTweak(
-                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
-                "pagefile.automatic_managed",
-                $"Pagefile Management \u2192 {targetValue}",
-                "Memory",
-                "WmiSetting",
-                $"AutomaticManagedPagefile: {currentValue}",
-                $"AutomaticManagedPagefile: {targetValue}",
-                "WmiSettingRestore",
-                true,
-                "SAFE"
-            );
+            return new OptimizationResult { Status = ResultStatus.Failed, ItemId = "Pagefile", DisplayName = entry.DisplayName, Message = bkErr };
         }
-        catch { }
 
         try
         {
@@ -59,8 +59,22 @@ public class PagefileOptimizationHandler : IActionHandler
             using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
             foreach (ManagementObject obj in searcher.Get())
             {
-                obj["AutomaticManagedPagefile"] = setAuto;
-                obj.Put();
+                using (obj)
+                {
+                    obj["AutomaticManagedPagefile"] = setAuto;
+                    obj.Put();
+                }
+            }
+
+            string readBack = GetCurrentValueDisplay(entry);
+            if (!readBack.Equals(setAuto ? "Auto" : "Manual", StringComparison.OrdinalIgnoreCase))
+            {
+                return new OptimizationResult
+                {
+                    Status = ResultStatus.Failed,
+                    ItemId = "Pagefile",
+                    Message = $"WMI readback mismatch: expected {(setAuto ? "Auto" : "Manual")}, observed '{readBack}'."
+                };
             }
 
             return new OptimizationResult
@@ -68,7 +82,7 @@ public class PagefileOptimizationHandler : IActionHandler
                 Status = ResultStatus.RequiresReboot,
                 ItemId = "Pagefile",
                 DisplayName = $"Set Pagefile optimization to {targetValue}",
-                
+                Message = $"Verified AutomaticManagedPagefile={readBack} (reboot recommended).",
                 RequiresReboot = true
             };
         }

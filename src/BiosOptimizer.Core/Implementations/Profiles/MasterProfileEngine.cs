@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BiosOptimizer.Core.Implementations.Power;
 using BiosOptimizer.Core.Models;
+using BiosOptimizer.Core.V4.Architecture;
 
 namespace BiosOptimizer.Core.Implementations.Profiles
 {
@@ -110,6 +111,17 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                 var (appState, appReason) = def.ApplicabilityDetector(hw, wl);
                 string currentState = def.CurrentStateReader();
                 string targetState = def.TargetStateReader();
+
+                string canTarget = GlobalOptimizationRegistry.NormalizeTarget(def.Category == "Power" ? "Power" : "SetRegistryValue", def.OptimizationId);
+                var gStatus = GlobalAppliedStateManager.Instance.EvaluateTargetState(canTarget, targetState, out var obsVal);
+                if (gStatus == GlobalAppliedStatus.ALREADY_APPLIED || gStatus == GlobalAppliedStatus.ALREADY_OPTIMAL || gStatus == GlobalAppliedStatus.ACTIVE_PROFILE)
+                {
+                    appState = ApplicabilityState.AlreadyOptimal;
+                    appReason = gStatus == GlobalAppliedStatus.ALREADY_APPLIED
+                        ? "Already applied and verified by ERROR OPTIMIZER"
+                        : "Current system setting matches optimal target";
+                }
+
                 var learningRecord = OptimizationLearningEngine.Instance.GetRecord(def.OptimizationId);
 
                 var item = new ProfilePlanItem
@@ -117,7 +129,7 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                     Definition = def,
                     State = appState,
                     ApplicabilityReason = appReason,
-                    CurrentState = currentState,
+                    CurrentState = !string.IsNullOrWhiteSpace(obsVal) ? obsVal : currentState,
                     TargetState = targetState,
                     LearningHistory = learningRecord,
                     IsSelected = appState == ApplicabilityState.Applicable
@@ -136,6 +148,16 @@ namespace BiosOptimizer.Core.Implementations.Profiles
             await Task.Yield();
             try
             {
+                string canTarget = GlobalOptimizationRegistry.NormalizeTarget(item.Definition.Category == "Power" ? "Power" : "SetRegistryValue", item.Definition.OptimizationId);
+                if (!GlobalAppliedStateManager.Instance.CanExecute(profileId, canTarget, item.TargetState, out string rej))
+                {
+                    item.IsApplied = true;
+                    item.IsVerified = true;
+                    item.IsFailed = false;
+                    item.FailureReason = rej;
+                    return true;
+                }
+
                 string before = item.Definition.CurrentStateReader();
                 item.CapturedBackupState = item.Definition.ApplyHandler();
                 
@@ -150,6 +172,20 @@ namespace BiosOptimizer.Core.Implementations.Profiles
                 if (!verified)
                 {
                     item.FailureReason = "Verification readback did not match expected target.";
+                }
+                else
+                {
+                    GlobalAppliedStateManager.Instance.RecordApplied(
+                        canTarget,
+                        item.Definition.OptimizationId,
+                        profileId,
+                        profileId,
+                        before,
+                        after,
+                        verified: true,
+                        rollbackAvailable: true,
+                        Guid.NewGuid().ToString("N")[..8],
+                        item.Definition.Category == "Power" ? "Power" : "SetRegistryValue");
                 }
 
                 // Record outcome in Machine History

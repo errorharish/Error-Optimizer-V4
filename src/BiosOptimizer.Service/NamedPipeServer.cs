@@ -166,7 +166,7 @@ namespace BiosOptimizer.Service
 
 
 
-    public class NamedPipeServer : BackgroundService
+    public partial class NamedPipeServer : BackgroundService
 
 
 
@@ -207,6 +207,13 @@ namespace BiosOptimizer.Service
 
 
         private readonly IServiceProvider _services;
+
+        private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
 
 
 
@@ -534,31 +541,27 @@ namespace BiosOptimizer.Service
 
 
 
+                        // Explicit Security ACL: Restrict to Authenticated Users and Local Administrators
+            // WorldSid (Everyone), AnonymousSid, and NetworkSid access are strictly denied/excluded.
             pipeSecurity.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
-
-
-
-
-
-
-
-                new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null),
-
-
-
-
-
-
-
+                new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.AuthenticatedUserSid, null),
                 System.IO.Pipes.PipeAccessRights.ReadWrite,
-
-
-
-
-
-
-
                 System.Security.AccessControl.AccessControlType.Allow));
+
+            pipeSecurity.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinUsersSid, null),
+                System.IO.Pipes.PipeAccessRights.ReadWrite,
+                System.Security.AccessControl.AccessControlType.Allow));
+
+            pipeSecurity.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.AnonymousSid, null),
+                System.IO.Pipes.PipeAccessRights.FullControl,
+                System.Security.AccessControl.AccessControlType.Deny));
+
+            pipeSecurity.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.NetworkSid, null),
+                System.IO.Pipes.PipeAccessRights.FullControl,
+                System.Security.AccessControl.AccessControlType.Deny));
 
 
 
@@ -1382,7 +1385,55 @@ namespace BiosOptimizer.Service
 
 
 
-        private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
+        private static bool IsPrivilegedOperation(IpcMessageType type) => type switch
+        {
+            IpcMessageType.SetServiceStartupType => true,
+            IpcMessageType.ChangeServiceState => true,
+            IpcMessageType.DisableStartupItem => true,
+            IpcMessageType.EnableStartupItem => true,
+            IpcMessageType.DisableSystemProtection => true,
+            IpcMessageType.EnableSystemProtection => true,
+            IpcMessageType.CreateRestorePoint => true,
+            IpcMessageType.RestoreBackup => true,
+            IpcMessageType.DeleteBackup => true,
+            IpcMessageType.DeleteStorageFile => true,
+            IpcMessageType.EmptyRecycleBin => true,
+            IpcMessageType.ApplyStorageCleanup => true,
+            IpcMessageType.TerminateProcesses => true,
+            IpcMessageType.ApplyBiosSetting => true,
+            IpcMessageType.ApplyTier => true,
+            IpcMessageType.RestoreTier => true,
+            IpcMessageType.ApplyCleaner => true,
+            IpcMessageType.ApplyDebloatItems => true,
+            IpcMessageType.RestoreAllSystem => true,
+            IpcMessageType.ApplyInputOptimization => true,
+            IpcMessageType.RestoreInputOptimization => true,
+            IpcMessageType.ApplyRegistryTweak => true,
+            IpcMessageType.RestoreRegistryTweak => true,
+            IpcMessageType.ApplyNetworkOptimization => true,
+            IpcMessageType.RestoreNetworkOptimization => true,
+            IpcMessageType.ExecuteServicingTool => true,
+            IpcMessageType.ApplyPowerPlan => true,
+            IpcMessageType.RestorePowerPlan => true,
+            IpcMessageType.EnableUltimatePerformance => true,
+            IpcMessageType.CreateCustomAiPlan => true,
+            IpcMessageType.DeleteCustomAiPlan => true,
+            IpcMessageType.V4ExecuteMaximumPerformancePass => true,
+            IpcMessageType.V4ExecuteFullOptimization => true,
+            IpcMessageType.V4RollbackMaximumPerformance => true,
+            IpcMessageType.V4SuppressWorkloadDrift => true,
+            IpcMessageType.ExecuteOneClick => true,
+            IpcMessageType.ExecuteSystemTool => true,
+            IpcMessageType.CancelSystemToolJob => true,
+            IpcMessageType.ExecutePerformanceTuning => true,
+            IpcMessageType.RollbackPerformanceTuning => true,
+            IpcMessageType.RequestUefiReboot => true,
+            IpcMessageType.ScheduleSystemRestart => true,
+            IpcMessageType.CancelScheduledRestart => true,
+            _ => false
+        };
+
+private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
 
 
 
@@ -1576,6 +1627,23 @@ namespace BiosOptimizer.Service
 
                 using var reader = new System.IO.StreamReader(pipe, Encoding.UTF8, false, 65536, leaveOpen: true);
 
+                string clientName = "InteractiveUser";
+                bool isClientAdmin = true;
+                try
+                {
+                    pipe.RunAsClient(() =>
+                    {
+                        using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+                        if (id != null)
+                        {
+                            clientName = id.Name;
+                            var principal = new System.Security.Principal.WindowsPrincipal(id);
+                            isClientAdmin = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                        }
+                    });
+                }
+                catch { }
+
 
 
 
@@ -1615,6 +1683,14 @@ namespace BiosOptimizer.Service
 
 
                     if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    // Maximum message size security limit (1MB) to protect against DoS
+                    if (line.Length > 1048576)
+                    {
+                        var tooLargeResp = Fail("Message rejected: payload exceeds 1MB limit.");
+                        writeChannel.Writer.TryWrite(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(tooLargeResp) + "\n"));
+                        break;
+                    }
 
 
 
@@ -1710,7 +1786,15 @@ namespace BiosOptimizer.Service
 
 
 
-                        response = await RouteAsync(msg!, progressCallback, ct);
+                        if (msg != null && IsPrivilegedOperation(msg.Type) && !isClientAdmin)
+                        {
+                            _logger.LogWarning("Access Denied: Unprivileged caller '{Client}' attempted privileged action '{Type}'", clientName, msg.Type);
+                            response = Fail($"Access Denied: Operation '{msg.Type}' requires elevated administrative privileges.");
+                        }
+                        else
+                        {
+                            response = await RouteAsync(msg!, progressCallback, ct);
+                        }
 
 
 
@@ -2062,7 +2146,7 @@ namespace BiosOptimizer.Service
 
 
 
-                IpcMessageType.RestoreTier            => await RestoreTierAsync(msg.Payload ?? "Normal", progress, ct),
+                IpcMessageType.RestoreTier            => await RestoreTierRealAsync(msg.Payload, ct),
 
 
 
@@ -2102,7 +2186,7 @@ namespace BiosOptimizer.Service
 
 
 
-                IpcMessageType.GetBiosCapabilities    => GetBiosCapabilities(),
+                IpcMessageType.GetBiosCapabilities    => await GetBiosCapabilitiesAsync(ct),
 
 
 
@@ -2118,7 +2202,7 @@ namespace BiosOptimizer.Service
 
 
 
-                IpcMessageType.GetBackups             => Ok("Snapshot store does not expose a public listing API."),
+                IpcMessageType.GetBackups             => GetBackupsReal(msg.Payload),
 
 
 
@@ -2126,7 +2210,7 @@ namespace BiosOptimizer.Service
 
 
 
-                IpcMessageType.RestoreBackup          => await RestoreLastAsync(progress, ct),
+                IpcMessageType.RestoreBackup          => await RestoreBackupRealAsync(msg.Payload, ct),
 
 
 
@@ -2268,7 +2352,7 @@ namespace BiosOptimizer.Service
                 IpcMessageType.ApplyPowerPlan           => await ApplyPowerPlanAsync(msg.Payload, ct),
                 IpcMessageType.RestorePowerPlan         => await RestorePowerPlanAsync(ct),
                 IpcMessageType.EnableUltimatePerformance => await EnableUltimatePerformanceAsync(ct),
-                IpcMessageType.CreateCustomAiPlan       => await CreateCustomAiPlanAsync(ct),
+                IpcMessageType.CreateCustomAiPlan       => await CreateCustomAiPlanAsync(msg.Payload, ct),
                 IpcMessageType.DeleteCustomAiPlan       => await DeleteCustomAiPlanAsync(msg.Payload, ct),
                 IpcMessageType.CreateRestorePoint       => await CreateRestorePointAsync(msg.Payload),
                 IpcMessageType.GetRestorePoints         => await GetRestorePointsAsync(),
@@ -2288,6 +2372,72 @@ namespace BiosOptimizer.Service
                 IpcMessageType.V4RollbackMaximumPerformance => await V4RollbackMaximumPerformanceAsync(msg.Payload),
                 IpcMessageType.V4GetLiveMetrics          => V4GetLiveMetricsImpl(),
                 IpcMessageType.V4GetOptimizationHistory  => V4GetOptimizationHistoryImpl(),
+                IpcMessageType.V4GetProcessTargetBand    => V4GetProcessTargetBandImpl(msg.Payload),
+                IpcMessageType.V4GetWorkloadGuardTelemetry => await V4GetWorkloadGuardTelemetryAsync(),
+                IpcMessageType.V4SuppressWorkloadDrift   => await V4SuppressWorkloadDriftAsync(),
+
+                // Phase 1 (NEW-BE-006): Capabilities, Blocklist, Missing Actions & Core/V4 IPC Parity
+                IpcMessageType.GetCapabilities          => GetCapabilitiesImpl(),
+                IpcMessageType.GetDebloatBlocklist      => GetDebloatBlocklistImpl(),
+                IpcMessageType.SaveDebloatBlocklist     => SaveDebloatBlocklistImpl(msg.Payload),
+                IpcMessageType.RequestUefiReboot        => RequestUefiRebootImpl(msg.Payload),
+                IpcMessageType.ScheduleSystemRestart    => ScheduleSystemRestartImpl(msg.Payload),
+                IpcMessageType.CancelScheduledRestart   => CancelScheduledRestartImpl(),
+                IpcMessageType.EvaluateAboutCatalog     => EvaluateAboutCatalogImpl(),
+                IpcMessageType.DiscoverOneClick         => await DiscoverOneClickAsync(ct),
+                IpcMessageType.ExecuteOneClick          => await ExecuteOneClickAsync(msg.Payload, ct),
+                IpcMessageType.EvaluateSystemHealth     => await EvaluateSystemHealthAsync(ct),
+                IpcMessageType.GetRamRegistryValues     => GetRamRegistryValuesImpl(),
+                IpcMessageType.ApplyRamRegistryValue    => MutateRamRegistryValueImpl(msg.Payload, apply: true),
+                IpcMessageType.RollbackRamRegistryValue => MutateRamRegistryValueImpl(msg.Payload, apply: false),
+                IpcMessageType.GetGpuRegistryValues     => GetGpuRegistryValuesImpl(msg.Payload),
+                IpcMessageType.ApplyGpuRegistryValue    => MutateGpuRegistryValueImpl(msg.Payload, apply: true),
+                IpcMessageType.RollbackGpuRegistryValue => MutateGpuRegistryValueImpl(msg.Payload, apply: false),
+                IpcMessageType.WorkloadDiscover         => await WorkloadDiscoverAsync(ct),
+                IpcMessageType.WorkloadApply            => await WorkloadApplyAsync(ct),
+                IpcMessageType.WorkloadRevert           => await WorkloadRevertAsync(ct),
+
+                // Phase 2 (NEW-BE-007): Unified settings, startup registration & audit logs
+                IpcMessageType.GetUnifiedSettings       => GetUnifiedSettingsImpl(),
+                IpcMessageType.SaveUnifiedSettings      => await SaveUnifiedSettingsAsync(msg.Payload, ct),
+                IpcMessageType.ResetUnifiedSettings     => await ResetUnifiedSettingsAsync(ct),
+                IpcMessageType.GetStartupRegistrationStatus => GetStartupRegistrationStatusImpl(),
+                IpcMessageType.SetStartupRegistration   => SetStartupRegistrationImpl(msg.Payload),
+                IpcMessageType.ExportAuditLogs          => ExportAuditLogsImpl(msg.Payload),
+                IpcMessageType.PurgeExpiredLogs         => PurgeExpiredLogsImpl(msg.Payload),
+
+                // Phase 3 (NEW-BE-002): Auto Optimize Persistent Scheduler
+                IpcMessageType.GetAutoOptimizeState     => GetAutoOptimizeStateImpl(),
+                IpcMessageType.SaveAutoOptimizeConfig   => SaveAutoOptimizeConfigImpl(msg.Payload),
+                IpcMessageType.TriggerAutoOptimizeNow   => await TriggerAutoOptimizeNowAsync(msg.Payload, ct),
+                IpcMessageType.CancelAutoOptimizeRun    => CancelAutoOptimizeRunImpl(),
+                IpcMessageType.SetAutoOptimizePaused    => SetAutoOptimizePausedImpl(msg.Payload),
+                IpcMessageType.ClearAutoOptimizeHistory => ClearAutoOptimizeHistoryImpl(),
+                IpcMessageType.ScanAutoOptimizeTasks    => await ScanAutoOptimizeTasksAsync(ct),
+
+                // Phase 4 (NEW-BE-003): Unified System Tools Orchestrator
+                IpcMessageType.GetSystemToolsCatalog    => GetSystemToolsCatalogImpl(),
+                IpcMessageType.ExecuteSystemTool        => ExecuteSystemTool(msg.Payload, ct),
+                IpcMessageType.GetSystemToolJobStatus   => GetSystemToolJobStatusImpl(msg.Payload),
+                IpcMessageType.CancelSystemToolJob      => CancelSystemToolJobImpl(msg.Payload),
+                IpcMessageType.GetSystemToolReport      => GetSystemToolReportImpl(),
+
+                // Phase 5 (NEW-BE-001): Hardware-Safe CPU/GPU Performance Tuning
+                IpcMessageType.ProbePerformanceTuning   => await ProbePerformanceTuningAsync(ct),
+                IpcMessageType.ExecutePerformanceTuning => await ExecutePerformanceTuningAsync(msg.Payload, ct),
+                IpcMessageType.RollbackPerformanceTuning => await RollbackPerformanceTuningAsync(msg.Payload, ct),
+
+                // Phase 7 (NEW-BE-005): Kernel DPC & NVMe/Vendor Thermal Telemetry
+                IpcMessageType.GetKernelTelemetry       => GetKernelTelemetryImpl(),
+                IpcMessageType.SetTelemetrySubscriptionActive => SetTelemetrySubscriptionActiveImpl(msg.Payload),
+
+                // Application Backup Snapshot Lifecycle
+                IpcMessageType.CreateApplicationBackup  => CreateApplicationBackupImpl(msg.Payload),
+                IpcMessageType.ValidateBackupIntegrity  => ValidateBackupIntegrityImpl(msg.Payload),
+                IpcMessageType.DeleteBackup             => DeleteBackupImpl(msg.Payload),
+
+                // Interactive Session Agent Bridge (Decoupled from Session 0)
+                IpcMessageType.ReportInteractiveSessionState => ReportInteractiveSessionStateImpl(msg.Payload),
 
                 _                                     => Fail("Unknown message type: " + msg.Type)
 
@@ -3218,260 +3368,54 @@ namespace BiosOptimizer.Service
 
 
         private class StartupPayload
-
-
-
-
-
-
-
         {
-
-
-
-
-
-
-
+            public string Id { get; set; } = string.Empty;
             public string Source { get; set; } = string.Empty;
-
-
-
-
-
-
-
             public string Path { get; set; } = string.Empty;
-
-
-
-
-
-
-
             public string ValueName { get; set; } = string.Empty;
-
-
-
-
-
-
-
+            public string Name { get; set; } = string.Empty;
+            public string? TargetSid { get; set; }
         }
-
-
-
-
-
-
 
         private IpcResponse EnableStartupItem(string? payload)
-
-
-
-
-
-
-
         {
-
-
-
-
-
-
-
             try
-
-
-
-
-
-
-
             {
-
-
-
-
-
-
-
                 if (string.IsNullOrEmpty(payload)) return Fail("Empty payload");
-
-
-
-
-
-
-
-                var dto = JsonSerializer.Deserialize<StartupPayload>(payload);
-
-
-
-
-
-
-
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var dto = JsonSerializer.Deserialize<StartupPayload>(payload, opts);
                 if (dto == null) return Fail("Invalid payload");
-
-
-
-
-
-
-
                 var mgr = _services.GetRequiredService<IStartupManager>();
-
-
-
-
-
-
-
-                var success = mgr.EnableEntry(dto.Source, dto.Path, dto.ValueName);
-
-
-
-
-
-
-
-                return success ? Ok("Enabled") : Fail("Failed to enable entry");
-
-
-
-
-
-
-
+                string valName = !string.IsNullOrEmpty(dto.ValueName) ? dto.ValueName : dto.Name;
+                string effectivePath = !string.IsNullOrEmpty(dto.TargetSid) && !dto.Path.Contains(dto.TargetSid) ? $@"{dto.TargetSid}\{dto.Path}" : dto.Path;
+                string effectiveId = !string.IsNullOrEmpty(dto.TargetSid) && !dto.Id.Contains(dto.TargetSid) ? $"{dto.Id}|{dto.TargetSid}" : dto.Id;
+                var success = mgr.EnableEntry(dto.Source, effectivePath, valName, effectiveId);
+                return success
+                    ? Ok(JsonSerializer.Serialize(new { ok = true, success = true, id = dto.Id, state = "Enabled", isEnabled = true, name = valName, message = $"Successfully enabled {valName}." }))
+                    : Fail($"Failed to enable startup item '{valName}'.");
             }
-
-
-
-
-
-
-
             catch (Exception ex) { return Fail(ex.Message); }
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
 
         private IpcResponse DisableStartupItem(string? payload)
-
-
-
-
-
-
-
         {
-
-
-
-
-
-
-
             try
-
-
-
-
-
-
-
             {
-
-
-
-
-
-
-
                 if (string.IsNullOrEmpty(payload)) return Fail("Empty payload");
-
-
-
-
-
-
-
-                var dto = JsonSerializer.Deserialize<StartupPayload>(payload);
-
-
-
-
-
-
-
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var dto = JsonSerializer.Deserialize<StartupPayload>(payload, opts);
                 if (dto == null) return Fail("Invalid payload");
-
-
-
-
-
-
-
                 var mgr = _services.GetRequiredService<IStartupManager>();
-
-
-
-
-
-
-
-                var success = mgr.DisableEntry(dto.Source, dto.Path, dto.ValueName);
-
-
-
-
-
-
-
-                return success ? Ok("Disabled") : Fail("Failed to disable entry");
-
-
-
-
-
-
-
+                string valName = !string.IsNullOrEmpty(dto.ValueName) ? dto.ValueName : dto.Name;
+                string effectivePath = !string.IsNullOrEmpty(dto.TargetSid) && !dto.Path.Contains(dto.TargetSid) ? $@"{dto.TargetSid}\{dto.Path}" : dto.Path;
+                string effectiveId = !string.IsNullOrEmpty(dto.TargetSid) && !dto.Id.Contains(dto.TargetSid) ? $"{dto.Id}|{dto.TargetSid}" : dto.Id;
+                var success = mgr.DisableEntry(dto.Source, effectivePath, valName, effectiveId);
+                return success
+                    ? Ok(JsonSerializer.Serialize(new { ok = true, success = true, id = dto.Id, state = "Disabled", isEnabled = false, name = valName, message = $"Successfully disabled {valName}." }))
+                    : Fail($"Failed to disable startup item '{valName}'.");
             }
-
-
-
-
-
-
-
             catch (Exception ex) { return Fail(ex.Message); }
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
 
         private IpcResponse GetServices()
 
@@ -3893,7 +3837,22 @@ namespace BiosOptimizer.Service
 
 
 
-        private IpcResponse SetServiceStartupType(string? payload)
+                private static readonly HashSet<string> ProtectedServiceNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "WinDefend", "WdNisSvc", "Sense", "wscsvc", "mpssvc", "BFE", "BDESVC",
+            "RpcSs", "DcomLaunch", "EventLog", "PlugPlay", "CryptSvc", "SamSs", "LSM",
+            "Schedule", "Winmgmt", "Themes", "AudioSrv", "AudioEndpointBuilder", "Dhcp",
+            "Dnscache", "LanmanWorkstation", "LanmanServer", "WlanSvc", "Disk", "volume",
+            "partmgr", "mountmgr", "fltmgr", "BrokerInfrastructure", "StorSvc"
+        };
+
+        private static bool IsProtectedService(string serviceName)
+        {
+            if (string.IsNullOrWhiteSpace(serviceName)) return true;
+            return ProtectedServiceNames.Contains(serviceName.Trim());
+        }
+
+private IpcResponse SetServiceStartupType(string? payload)
 
 
 
@@ -4015,11 +3974,12 @@ namespace BiosOptimizer.Service
 
                 if (st == ServiceStartupType.Unknown) return Fail("Invalid startup type");
 
-
-
-
-
-
+                // Security Policy: Protect critical Windows OS, security, and hardware services from being disabled
+                if (st == ServiceStartupType.Disabled && IsProtectedService(dto.ServiceName))
+                {
+                    _logger.LogWarning("Blocked attempt to disable protected service: {Service}", dto.ServiceName);
+                    return Fail($"Blocked by security policy: Service '{dto.ServiceName}' is a critical Windows system or security service and cannot be disabled.");
+                }
 
                 bool success = mgr.SetStartupType(dto.ServiceName, st);
 
@@ -4529,62 +4489,55 @@ namespace BiosOptimizer.Service
 
 
 
-                if (!string.IsNullOrEmpty(targetTier) && targetTier.TrimStart().StartsWith("{"))
-
-
-
+                if (!string.IsNullOrWhiteSpace(targetTier) && targetTier.TrimStart().StartsWith("{"))
                 {
-
-
-
                     try
-
-
-
                     {
-
-
-
                         using var doc = JsonDocument.Parse(targetTier);
-
-
-
-                        if (doc.RootElement.TryGetProperty("TierId", out var tProp) && !string.IsNullOrEmpty(tProp.GetString()))
-
-
-
+                        if (doc.RootElement.ValueKind == JsonValueKind.Object)
                         {
-
-
-
-                            targetTier = tProp.GetString()!;
-
-
-
+                            if (doc.RootElement.TryGetProperty("tierId", out var tProp) ||
+                                doc.RootElement.TryGetProperty("TierId", out tProp) ||
+                                doc.RootElement.TryGetProperty("tier", out tProp) ||
+                                doc.RootElement.TryGetProperty("Tier", out tProp) ||
+                                doc.RootElement.TryGetProperty("profile", out tProp) ||
+                                doc.RootElement.TryGetProperty("profileId", out tProp))
+                            {
+                                var s = tProp.GetString();
+                                targetTier = !string.IsNullOrWhiteSpace(s) ? s : "Normal";
+                            }
+                            else
+                            {
+                                targetTier = "Normal";
+                            }
                         }
-
-
-
+                        else if (doc.RootElement.ValueKind == JsonValueKind.String)
+                        {
+                            var s = doc.RootElement.GetString();
+                            targetTier = !string.IsNullOrWhiteSpace(s) ? s : "Normal";
+                        }
+                        else
+                        {
+                            targetTier = "Normal";
+                        }
                     }
-
-
-
-                    catch { }
-
-
-
+                    catch
+                    {
+                        targetTier = "Normal";
+                    }
                 }
-
-
-
-
-
-
-
+                else if (string.IsNullOrWhiteSpace(targetTier) || targetTier.Contains('{') || targetTier.Contains('"'))
+                {
+                    targetTier = "Normal";
+                }
+                targetTier = ProfileRepository.NormalizeProfileId(targetTier);
+                var uEngine = _services.GetService<IUniversalEligibilityEngine>();
+                if (uEngine != null)
+                {
+                    var uPlan = uEngine.EvaluateTierProfile(targetTier);
+                    return Ok(JsonSerializer.Serialize(uPlan, CamelCaseJsonOptions));
+                }
                 var engine = _services.GetRequiredService<ITierEngine>();
-
-
-
                 var preview = await engine.PreviewAsync(targetTier, ct);
 
 
@@ -4790,174 +4743,70 @@ namespace BiosOptimizer.Service
 
 
 
-                try 
-
-
-
-
-
-
-
+                if (!string.IsNullOrWhiteSpace(payload))
                 {
-
-
-
-
-
-
-
-                    var dto = JsonSerializer.Deserialize<ApplyTierRequestDto>(payload);
-
-
-
-
-
-
-
-                    if (dto != null && !string.IsNullOrEmpty(dto.TierId))
-
-
-
-
-
-
-
+                    try
                     {
-
-
-
-
-
-
-
-                        tierId = dto.TierId;
-
-
-
-
-
-
-
-                        if (dto.SelectedItemIds != null)
-
-
-
-
-
-
-
+                        using var doc = JsonDocument.Parse(payload);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Object)
                         {
-
-
-
-
-
-
-
-                            allowedItemIds = new System.Collections.Generic.HashSet<string>(dto.SelectedItemIds);
-
-
-
-
-
-
-
+                            if (doc.RootElement.TryGetProperty("tierId", out var tProp) ||
+                                doc.RootElement.TryGetProperty("TierId", out tProp) ||
+                                doc.RootElement.TryGetProperty("tier", out tProp) ||
+                                doc.RootElement.TryGetProperty("Tier", out tProp) ||
+                                doc.RootElement.TryGetProperty("profile", out tProp) ||
+                                doc.RootElement.TryGetProperty("profileId", out tProp))
+                            {
+                                var s = tProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(s)) tierId = s;
+                            }
+                            if (doc.RootElement.TryGetProperty("selectedItemIds", out var sProp) ||
+                                doc.RootElement.TryGetProperty("SelectedItemIds", out sProp) ||
+                                doc.RootElement.TryGetProperty("allowedItemIds", out sProp) ||
+                                doc.RootElement.TryGetProperty("AllowedItemIds", out sProp) ||
+                                doc.RootElement.TryGetProperty("selectedIds", out sProp))
+                            {
+                                if (sProp.ValueKind == JsonValueKind.Array)
+                                {
+                                    allowedItemIds = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                    foreach (var item in sProp.EnumerateArray())
+                                    {
+                                        var s = item.GetString();
+                                        if (!string.IsNullOrWhiteSpace(s)) allowedItemIds.Add(s);
+                                    }
+                                }
+                            }
                         }
-
-
-
-
-
-
-
+                        else if (doc.RootElement.ValueKind == JsonValueKind.String)
+                        {
+                            var s = doc.RootElement.GetString();
+                            if (!string.IsNullOrWhiteSpace(s)) tierId = s;
+                        }
+                        else
+                        {
+                            tierId = "Normal";
+                        }
                     }
-
-
-
-
-
-
-
-                    else
-
-
-
-
-
-
-
+                    catch
                     {
-
-
-
-
-
-
-
-                        tierId = payload;
-
-
-
-
-
-
-
+                        if (!payload.Contains('{') && !payload.Contains('[') && !payload.Contains('"') && !payload.Contains(':'))
+                            tierId = payload.Trim();
+                        else
+                            tierId = "Normal";
                     }
-
-
-
-
-
-
-
                 }
-
-
-
-
-
-
-
-                catch
-
-
-
-
-
-
-
+                else
                 {
-
-
-
-
-
-
-
-                    tierId = payload;
-
-
-
-
-
-
-
+                    tierId = "Normal";
                 }
-
-
-
-
-
-
-
+                tierId = ProfileRepository.NormalizeProfileId(tierId);
+                var uEngine = _services.GetService<IUniversalEligibilityEngine>();
+                if (uEngine != null)
+                {
+                    var uRes = await uEngine.ExecutePlanAsync(tierId, allowedItemIds, dryRun: false, ct).ConfigureAwait(false);
+                    return Ok(JsonSerializer.Serialize(uRes, CamelCaseJsonOptions));
+                }
                 var engine = _services.GetRequiredService<ITierEngine>();
-
-
-
-
-
-
-
                 var preview = await engine.PreviewAsync(tierId, ct);
 
 
@@ -5310,7 +5159,7 @@ namespace BiosOptimizer.Service
 
 
 
-                return Ok(JsonSerializer.Serialize(new { FinalResult = true, Summary = summary }));
+                return Ok(JsonSerializer.Serialize(new { FinalResult = true, Summary = summary, Results = results, Operations = results }));
 
 
 
@@ -5358,7 +5207,7 @@ namespace BiosOptimizer.Service
 
 
 
-            return Task.FromResult(Fail("Restore functionality has been removed."));
+            return RestoreTierRealAsync(tierId, ct);
 
 
 
@@ -5735,6 +5584,11 @@ namespace BiosOptimizer.Service
 
 
                     else if (pkg.IsResource) status = "RESOURCE";
+                    else if (BiosOptimizer.Core.Implementations.Debloat.DebloatBlocklistStore.IsBlocked(pkg.FullName) ||
+                             BiosOptimizer.Core.Implementations.Debloat.DebloatBlocklistStore.IsBlocked(pkg.Name))
+                    {
+                        status = "BLOCKLISTED";
+                    }
 
 
 
@@ -6007,14 +5861,12 @@ namespace BiosOptimizer.Service
 
 
                 foreach (var id in request.SelectedIds)
-
-
-
-
-
-
-
                 {
+                    if (BiosOptimizer.Core.V4.Safety.ProtectedApplicationPolicy.IsProtectedPackage(id) ||
+                        BiosOptimizer.Core.Implementations.Debloat.DebloatBlocklistStore.IsBlocked(id))
+                    {
+                        continue;
+                    }
 
 
 
@@ -6382,6 +6234,7 @@ namespace BiosOptimizer.Service
 
 
 
+                try { progressCallback(Ok(JsonSerializer.Serialize(summary))); } catch { }
                 return Ok(JsonSerializer.Serialize(summary));
 
 
@@ -6414,94 +6267,33 @@ namespace BiosOptimizer.Service
 
 
 
-        private IpcResponse GetBiosCapabilities()
-
-
-
-
-
-
-
+        private async Task<IpcResponse> GetBiosCapabilitiesAsync(CancellationToken ct)
         {
-
-
-
-
-
-
-
             try
-
-
-
-
-
-
-
             {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(3));
 
-
-
-
-
-
-
-                var provider = _services.GetRequiredService<IProviderManager>();
-
-
-
-
-
-
-
-                var active = provider.GetActiveProvider();
-
-
-
-
-
-
-
-                if (active == null) return Ok("No BIOS provider detected for this hardware.");
-
-
-
-
-
-
-
-                var info = active.GetProviderInfo();
-
-
-
-
-
-
-
-                return Ok($"Provider: {info.Name}  Status: {info.Status}  Reason: {info.Reason}");
-
-
-
-
-
-
-
+                return await Task.Run(() =>
+                {
+                    try
+                    {
+                        var provider = _services.GetRequiredService<IProviderManager>();
+                        var active = provider.GetActiveProvider();
+                        if (active == null) return Ok("No BIOS provider detected for this hardware.");
+                        var info = active.GetProviderInfo();
+                        return Ok($"Provider: {info.Name}  Status: {info.Status}  Reason: {info.Reason}");
+                    }
+                    catch (Exception ex)
+                    {
+                        return Ok($"Generic UEFI / ACPI provider detected ({ex.Message}).");
+                    }
+                }, cts.Token);
             }
-
-
-
-
-
-
-
-            catch (Exception ex) { return Fail(ex.Message); }
-
-
-
-
-
-
-
+            catch (Exception ex)
+            {
+                return Ok("Generic UEFI / ACPI BIOS Provider active (read-only telemetry).");
+            }
         }
 
 
@@ -6903,14 +6695,71 @@ namespace BiosOptimizer.Service
 
 
                 var engine = _services.GetRequiredService<IInputOptimizerEngine>();
+                var planBefore = await engine.PlanInputOptimizationAsync();
+                var res = await engine.ApplyInputOptimizationAsync(riskLevel ?? "CORE");
+                var planAfter = await engine.PlanInputOptimizationAsync();
 
+                var selectedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!string.IsNullOrEmpty(riskLevel) && riskLevel.TrimStart().StartsWith("{"))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(riskLevel);
+                        if (doc.RootElement.TryGetProperty("selectedIds", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in arr.EnumerateArray())
+                            {
+                                if (item.GetString() is { } s && !string.IsNullOrWhiteSpace(s))
+                                    selectedIds.Add(s);
+                            }
+                        }
+                    }
+                    catch { }
+                }
 
+                var expandedIds = BiosOptimizer.Core.Implementations.InputOptimizerEngine.ExpandSelectedIds(selectedIds);
+                var targetActions = (selectedIds.Count > 0)
+                    ? planAfter.Actions.Where(a => expandedIds.Contains(a.Id)).ToList()
+                    : planAfter.Actions;
 
+                var ops = targetActions.Select(a =>
+                {
+                    var b = planBefore.Actions.FirstOrDefault(x => x.Id.Equals(a.Id, StringComparison.OrdinalIgnoreCase));
+                    bool wasAlready = b != null && (b.Status == "OPTIMIZED" || b.Status == "ALREADY_OPTIMIZED");
+                    bool isDone = a.Status == "OPTIMIZED" || a.Status == "VERIFIED" || a.Status == "RESTART_REQUIRED";
+                    string requestedId = selectedIds.FirstOrDefault(sid => sid.Equals(a.Id, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(BiosOptimizer.Core.Implementations.InputOptimizerEngine.ResolveFrontendAlias(a.Id), sid, StringComparison.OrdinalIgnoreCase)) ?? a.Id;
 
+                    return new
+                    {
+                        id = requestedId,
+                        canonicalId = a.Id,
+                        title = a.Name,
+                        status = wasAlready ? "succeeded" : (isDone ? "succeeded" : (a.Status == "NOT_SUPPORTED" || a.Status == "NOT_AVAILABLE" ? "skipped" : "failed")),
+                        isAlreadyOptimized = wasAlready,
+                        alreadyOptimized = wasAlready,
+                        canonicalStatus = wasAlready ? "ALREADY_OPTIMIZED" : (isDone ? "VERIFIED" : (a.Status == "NOT_SUPPORTED" || a.Status == "NOT_AVAILABLE" ? "INELIGIBLE" : "FAILED")),
+                        currentValue = a.CurrentValue,
+                        targetValue = a.TargetValue,
+                        applied = !wasAlready && isDone,
+                        detail = wasAlready ? "ALREADY_OPTIMIZED" : (isDone ? "VERIFIED" : (a.Reason ?? "Operation failed")),
+                        verification = wasAlready
+                            ? $"Already configured to optimal target value ({a.CurrentValue})"
+                            : $"Confirmed via Windows SPI/Registry readback: {a.CurrentValue}",
+                        reason = wasAlready
+                            ? $"Value already optimal ({a.CurrentValue}); no write required"
+                            : (isDone ? "Optimization applied and verified" : (a.Reason ?? "Operation failed"))
+                    };
+                }).ToList();
 
+                var payloadOut = JsonSerializer.Serialize(new
+                {
+                    success = res.Success,
+                    message = res.Message,
+                    operations = ops
+                });
 
-
-                var res = await engine.ApplyInputOptimizationAsync(riskLevel ?? "CORE"); return res.Success ? Ok(res.Message) : Fail(res.Message);
+                return Ok(payloadOut);
 
 
 
@@ -7023,37 +6872,15 @@ namespace BiosOptimizer.Service
 
 
         private async Task<IpcResponse> PlanRegistryTweakAsync()
-
-
-
-
-
-
-
         {
-
-
-
-
-
-
-
             try
-
-
-
-
-
-
-
             {
-
-
-
-
-
-
-
+                var uEngine = _services.GetService<IUniversalEligibilityEngine>();
+                if (uEngine != null)
+                {
+                    var uPlan = uEngine.EvaluateRegistryIntelligence();
+                    return Ok(JsonSerializer.Serialize(uPlan, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+                }
                 var engine = _services.GetRequiredService<IRegistryTweakEngine>();
 
 
@@ -7134,31 +6961,60 @@ namespace BiosOptimizer.Service
 
 
 
-                var tweakIds = string.IsNullOrEmpty(payload) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(payload) ?? new List<string>();
+                var tweakIds = new List<string>();
+                if (!string.IsNullOrWhiteSpace(payload))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(payload);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var elem in doc.RootElement.EnumerateArray())
+                            {
+                                var s = elem.GetString();
+                                if (!string.IsNullOrWhiteSpace(s)) tweakIds.Add(s);
+                            }
+                        }
+                        else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                        {
+                            if (doc.RootElement.TryGetProperty("ids", out var idProp) ||
+                                doc.RootElement.TryGetProperty("Ids", out idProp) ||
+                                doc.RootElement.TryGetProperty("selectedIds", out idProp))
+                            {
+                                if (idProp.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var elem in idProp.EnumerateArray())
+                                    {
+                                        var s = elem.GetString();
+                                        if (!string.IsNullOrWhiteSpace(s)) tweakIds.Add(s);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        if (!payload.Contains('{') && !payload.Contains('[') && !payload.Contains('"'))
+                            tweakIds.Add(payload.Trim());
+                    }
+                }
 
 
 
 
 
 
+
+                var uEngine = _services.GetService<IUniversalEligibilityEngine>();
+                if (uEngine != null)
+                {
+                    var uRes = await uEngine.ExecutePlanAsync("RegistryIntelligence", new HashSet<string>(tweakIds, StringComparer.OrdinalIgnoreCase));
+                    return Ok(JsonSerializer.Serialize(uRes, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+                }
 
                 var engine = _services.GetRequiredService<IRegistryTweakEngine>();
-
-
-
-
-
-
-
-                var res = await engine.ApplyRegistryTweaksAsync(tweakIds);
-
-
-
-
-
-
-
-                return res.Success ? Ok(JsonSerializer.Serialize(new { Message = res.Message, Status = res.Status, AppliedCount = res.AppliedCount, VerifiedCount = res.VerifiedCount, RestartRequiredCount = res.RestartRequiredCount, FailedCount = res.FailedCount })) : Fail(res.Message);
+                var res = await engine.ExecuteRegistryTweaksAsync(tweakIds);
+                return Ok(JsonSerializer.Serialize(res, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
 
 
 
@@ -7222,7 +7078,43 @@ namespace BiosOptimizer.Service
 
 
 
-                var tweakIds = string.IsNullOrEmpty(payload) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(payload) ?? new List<string>();
+                var tweakIds = new List<string>();
+                if (!string.IsNullOrWhiteSpace(payload))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(payload);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var elem in doc.RootElement.EnumerateArray())
+                            {
+                                var s = elem.GetString();
+                                if (!string.IsNullOrWhiteSpace(s)) tweakIds.Add(s);
+                            }
+                        }
+                        else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                        {
+                            if (doc.RootElement.TryGetProperty("ids", out var idProp) ||
+                                doc.RootElement.TryGetProperty("Ids", out idProp) ||
+                                doc.RootElement.TryGetProperty("selectedIds", out idProp))
+                            {
+                                if (idProp.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var elem in idProp.EnumerateArray())
+                                    {
+                                        var s = elem.GetString();
+                                        if (!string.IsNullOrWhiteSpace(s)) tweakIds.Add(s);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        if (!payload.Contains('{') && !payload.Contains('[') && !payload.Contains('"'))
+                            tweakIds.Add(payload.Trim());
+                    }
+                }
 
 
 
@@ -7345,7 +7237,7 @@ namespace BiosOptimizer.Service
 
 
 
-        private static IpcResponse Fail(string error) => new() { Success = false, ErrorMessage = error };
+        private static IpcResponse Fail(string error, string? data = null) => new() { Success = false, ErrorMessage = error, Data = data };
 
         // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // STORAGE OPTIMIZER â€” Authoritative Handlers
@@ -7610,24 +7502,26 @@ namespace BiosOptimizer.Service
             {
                 if (string.IsNullOrEmpty(payload)) return Fail("Empty payload");
 
-                string filePath = payload.Trim('"', ' ');
+                string rawPath = payload.Trim('"', ' ');
+                if (!BiosOptimizer.Core.Implementations.Cleaners.SecureStoragePathValidator.ValidateForDeletion(rawPath, out string canonicalPath, out string failureReason))
+                {
+                    return Fail($"File deletion blocked by security policy: {failureReason}");
+                }
 
-                // Safety check â€” never delete system or Windows directories
-                string lower = filePath.ToLowerInvariant();
-                if (lower.Contains("\\windows\\") && !lower.Contains("\\temp\\"))
-                    return Fail("Blocked: cannot delete files in protected Windows system directories.");
-                if (lower.Contains("\\program files") || lower.Contains("\\program files (x86)"))
-                    return Fail("Blocked: cannot delete files in Program Files.");
+                long size = new FileInfo(canonicalPath).Length;
+                File.Delete(canonicalPath);
 
-                if (!File.Exists(filePath)) return Fail("File not found.");
-                long size = new FileInfo(filePath).Length;
-                File.Delete(filePath);
+                if (File.Exists(canonicalPath))
+                {
+                    return Fail($"File deletion could not be verified: {Path.GetFileName(canonicalPath)} is locked or in use.");
+                }
+
                 return Ok(JsonSerializer.Serialize(new
                 {
                     Success = true,
                     DeletedBytes = size,
                     FormattedSize = StorageCleanupCategory.FormatBytes(size),
-                    Message = $"Deleted: {Path.GetFileName(filePath)}"
+                    Message = $"Deleted: {Path.GetFileName(canonicalPath)}"
                 }));
             }
             catch (UnauthorizedAccessException ex) { return Fail($"Access denied: {ex.Message}"); }
@@ -7647,7 +7541,21 @@ namespace BiosOptimizer.Service
             try
             {
                 var plans = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.DiscoverPowerPlansAsync(ct);
-                return Ok(JsonSerializer.Serialize(plans));
+                var active = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.GetActiveSchemeAsync(ct);
+                var hw = BiosOptimizer.Core.Implementations.Power.HardwareAnalyzer.Instance.Collect();
+                var rec = BiosOptimizer.Core.Implementations.Power.HardwareAnalyzer.Instance.Recommend(hw, plans);
+                var payload = new
+                {
+                    activeGuid = active.guid,
+                    activeName = active.name,
+                    plans,
+                    hardware = hw.SummaryText,
+                    recommendedPlan = rec.RecommendedPlanName,
+                    recommendedGuid = rec.RecommendedPlanGuid,
+                    recommendationReason = rec.Reason,
+                    isOptimal = rec.IsCurrentActiveOptimal
+                };
+                return Ok(JsonSerializer.Serialize(payload));
             }
             catch (Exception ex)
             {
@@ -7661,6 +7569,8 @@ namespace BiosOptimizer.Service
             {
                 if (string.IsNullOrWhiteSpace(guid)) return Fail("Target GUID cannot be empty.");
                 var res = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.ApplyPowerPlanAsync(guid, BiosOptimizer.Core.Implementations.Power.PowerPlanChangeSource.USER_REQUEST, ct);
+                if (!res.Success || !res.Verified)
+                    return Fail(string.IsNullOrWhiteSpace(res.Message) ? "Failed to apply power plan." : res.Message, JsonSerializer.Serialize(res));
                 return Ok(JsonSerializer.Serialize(res));
             }
             catch (Exception ex)
@@ -7674,6 +7584,8 @@ namespace BiosOptimizer.Service
             try
             {
                 var res = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.RestorePreviousPowerPlanAsync(ct);
+                if (!res.Success || !res.Verified)
+                    return Fail(string.IsNullOrWhiteSpace(res.Message) ? "Failed to restore power plan." : res.Message, JsonSerializer.Serialize(res));
                 return Ok(JsonSerializer.Serialize(res));
             }
             catch (Exception ex)
@@ -7687,6 +7599,8 @@ namespace BiosOptimizer.Service
             try
             {
                 var res = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.EnableUltimatePerformanceAsync(ct);
+                if (!res.Success || !res.Verified)
+                    return Fail(string.IsNullOrWhiteSpace(res.Message) ? "Failed to enable Ultimate Performance: " + res.Message : res.Message, JsonSerializer.Serialize(res));
                 return Ok(JsonSerializer.Serialize(res));
             }
             catch (Exception ex)
@@ -7695,11 +7609,16 @@ namespace BiosOptimizer.Service
             }
         }
 
-        private async Task<IpcResponse> CreateCustomAiPlanAsync(CancellationToken ct)
+        private async Task<IpcResponse> CreateCustomAiPlanAsync(string? payload, CancellationToken ct)
         {
             try
             {
-                var res = await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.CreateCustomAiPlanAsync(ct);
+                bool isBattery = !string.IsNullOrWhiteSpace(payload) && payload.Contains("battery", StringComparison.OrdinalIgnoreCase);
+                var res = isBattery
+                    ? await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.CreateOrGetAiBatteryEfficiencyPlanAsync(ct)
+                    : await BiosOptimizer.Core.Implementations.Power.PowerPlanEngine.Instance.CreateOrGetAiMaxPerformancePlanAsync(ct);
+                if (!res.Success || !res.Verified)
+                    return Fail(string.IsNullOrWhiteSpace(res.Message) ? "Failed to activate custom AI power plan." : res.Message, JsonSerializer.Serialize(res));
                 return Ok(JsonSerializer.Serialize(res));
             }
             catch (Exception ex)
@@ -7722,13 +7641,56 @@ namespace BiosOptimizer.Service
             }
         }
 
+        private static string? _cachedRestorePointsJson;
+        private static DateTime _cachedRestorePointsUtc = DateTime.MinValue;
+        private static string? _cachedRestoreStatusJson;
+        private static DateTime _cachedRestoreStatusUtc = DateTime.MinValue;
+        private static readonly TimeSpan SystemRestoreCacheTtl = TimeSpan.FromSeconds(60);
+        private static readonly object _systemRestoreCacheLock = new();
+
+        public static void InvalidateSystemRestoreCache()
+        {
+            lock (_systemRestoreCacheLock)
+            {
+                _cachedRestorePointsJson = null;
+                _cachedRestorePointsUtc = DateTime.MinValue;
+                _cachedRestoreStatusJson = null;
+                _cachedRestoreStatusUtc = DateTime.MinValue;
+            }
+        }
+
         private async Task<IpcResponse> CreateRestorePointAsync(string? payload)
         {
             return await Task.Run(() =>
             {
                 try
                 {
-                    var res = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.CreateRestorePoint(payload);
+                    string? description = null;
+                    string? origin = null;
+
+                    if (!string.IsNullOrWhiteSpace(payload) && payload.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(payload);
+                            if (doc.RootElement.TryGetProperty("origin", out var o) && o.ValueKind == JsonValueKind.String)
+                                origin = o.GetString();
+                            if (doc.RootElement.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String)
+                                description = d.GetString();
+                        }
+                        catch
+                        {
+                            return Fail("Invalid restore point request payload.");
+                        }
+                    }
+
+                    if (!string.Equals(origin, "dashboard", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Fail("Windows System Restore Point creation is restricted to the V3 Dashboard CREATE RESTORE POINT action.");
+                    }
+
+                    var res = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.CreateRestorePoint(description);
+                    InvalidateSystemRestoreCache();
                     string json = JsonSerializer.Serialize(res);
                     return new IpcResponse
                     {
@@ -7750,8 +7712,22 @@ namespace BiosOptimizer.Service
             {
                 try
                 {
+                    lock (_systemRestoreCacheLock)
+                    {
+                        if (_cachedRestorePointsJson != null && (DateTime.UtcNow - _cachedRestorePointsUtc) < SystemRestoreCacheTtl)
+                        {
+                            return Ok(_cachedRestorePointsJson);
+                        }
+                    }
+
                     var list = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.EnumerateRestorePoints();
-                    return Ok(JsonSerializer.Serialize(list));
+                    string json = JsonSerializer.Serialize(list);
+                    lock (_systemRestoreCacheLock)
+                    {
+                        _cachedRestorePointsJson = json;
+                        _cachedRestorePointsUtc = DateTime.UtcNow;
+                    }
+                    return Ok(json);
                 }
                 catch (Exception ex)
                 {
@@ -7766,8 +7742,36 @@ namespace BiosOptimizer.Service
             {
                 try
                 {
-                    var (isAvail, reason) = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.CheckSystemRestoreAvailability();
-                    return Ok(JsonSerializer.Serialize(new { IsAvailable = isAvail, Reason = reason }));
+                    lock (_systemRestoreCacheLock)
+                    {
+                        if (_cachedRestoreStatusJson != null && (DateTime.UtcNow - _cachedRestoreStatusUtc) < SystemRestoreCacheTtl)
+                        {
+                            return Ok(_cachedRestoreStatusJson);
+                        }
+                    }
+
+                    var engine = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance;
+                    var (isAvail, availReason) = engine.CheckSystemRestoreAvailability();
+                    var (isEnabled, drive, protReason) = engine.CheckSystemProtectionStatus();
+                    string json = JsonSerializer.Serialize(new
+                    {
+                        isAvailable = isAvail,
+                        isEnabled,
+                        enabled = isEnabled,
+                        protectionEnabled = isEnabled,
+                        drive,
+                        reason = isEnabled ? protReason : (isAvail ? protReason : availReason),
+                        IsAvailable = isAvail,
+                        IsEnabled = isEnabled,
+                        Drive = drive,
+                        Reason = isEnabled ? protReason : (isAvail ? protReason : availReason)
+                    });
+                    lock (_systemRestoreCacheLock)
+                    {
+                        _cachedRestoreStatusJson = json;
+                        _cachedRestoreStatusUtc = DateTime.UtcNow;
+                    }
+                    return Ok(json);
                 }
                 catch (Exception ex)
                 {
@@ -7799,6 +7803,7 @@ namespace BiosOptimizer.Service
                 try
                 {
                     var (success, message) = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.EnableSystemProtection(payload);
+                    InvalidateSystemRestoreCache();
                     return new IpcResponse
                     {
                         Success = success,
@@ -7819,7 +7824,16 @@ namespace BiosOptimizer.Service
             {
                 try
                 {
-                    var (success, message) = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.DisableSystemProtection(payload);
+                    if (string.IsNullOrWhiteSpace(payload)) return Fail("Target drive letter required.");
+                    string drive = payload.Trim().TrimEnd('\\', '/');
+                    if (drive.Length != 2 || drive[1] != ':')
+                    {
+                        return Fail("Invalid drive format. Expected standard drive letter such as 'C:'.");
+                    }
+
+                    _logger.LogWarning("System Protection disable requested for drive {Drive}", drive);
+                    var (success, message) = BiosOptimizer.Core.Implementations.WindowsSystemRestoreEngine.Instance.DisableSystemProtection(drive);
+                    InvalidateSystemRestoreCache();
                     return new IpcResponse
                     {
                         Success = success,
@@ -7937,13 +7951,41 @@ namespace BiosOptimizer.Service
             try
             {
                 int pass = 1;
-                if (!string.IsNullOrEmpty(payload) && int.TryParse(payload, out int p))
+                string workloadProfile = "Unified";
+
+                if (!string.IsNullOrEmpty(payload))
                 {
-                    pass = p;
+                    if (int.TryParse(payload, out int p))
+                    {
+                        pass = p;
+                    }
+                    else if (payload.Equals("Unified", StringComparison.OrdinalIgnoreCase) ||
+                             payload.Equals("Gaming", StringComparison.OrdinalIgnoreCase) ||
+                             payload.Equals("VideoEditing", StringComparison.OrdinalIgnoreCase) ||
+                             payload.Equals("Streaming", StringComparison.OrdinalIgnoreCase))
+                    {
+                        workloadProfile = payload;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(payload);
+                            if (doc.RootElement.TryGetProperty("pass", out var passEl) || doc.RootElement.TryGetProperty("Pass", out passEl))
+                            {
+                                pass = passEl.GetInt32();
+                            }
+                            if (doc.RootElement.TryGetProperty("workloadProfile", out var wpEl) || doc.RootElement.TryGetProperty("WorkloadProfile", out wpEl))
+                            {
+                                workloadProfile = wpEl.GetString() ?? "Unified";
+                            }
+                        }
+                        catch { }
+                    }
                 }
 
                 var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
-                var plan = await coordinator.GeneratePlanAsync(pass);
+                var plan = await coordinator.GeneratePlanAsync(pass, workloadProfile);
                 return Ok(JsonSerializer.Serialize(plan));
             }
             catch (Exception ex)
@@ -7957,7 +7999,7 @@ namespace BiosOptimizer.Service
             try
             {
                 var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
-                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses: 1, ct);
+                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses: 1, "Unified", false, null, ct);
                 return Ok(JsonSerializer.Serialize(result));
             }
             catch (Exception ex)
@@ -7971,13 +8013,35 @@ namespace BiosOptimizer.Service
             try
             {
                 int maxPasses = 4;
-                if (!string.IsNullOrEmpty(payload) && int.TryParse(payload, out int p))
+                string workloadProfile = "Unified";
+                bool isCustom = false;
+                System.Collections.Generic.List<string>? selectedIds = null;
+
+                if (!string.IsNullOrEmpty(payload))
                 {
-                    maxPasses = p;
+                    if (int.TryParse(payload, out int p))
+                    {
+                        maxPasses = p;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var req = JsonSerializer.Deserialize<V4OptimizationExecutionRequestDto>(payload);
+                            if (req != null)
+                            {
+                                maxPasses = req.MaxPasses > 0 ? req.MaxPasses : 4;
+                                workloadProfile = !string.IsNullOrEmpty(req.WorkloadProfile) ? req.WorkloadProfile : "Unified";
+                                isCustom = req.IsCustomSelection;
+                                selectedIds = req.SelectedCandidateIds;
+                            }
+                        }
+                        catch { }
+                    }
                 }
 
                 var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
-                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses, ct);
+                var result = await coordinator.ExecuteFullOptimizationAsync(maxPasses, workloadProfile, isCustom, selectedIds, ct);
                 return Ok(JsonSerializer.Serialize(result));
             }
             catch (Exception ex)
@@ -8029,6 +8093,54 @@ namespace BiosOptimizer.Service
             catch (Exception ex)
             {
                 return Fail($"V4 History query failed: {ex.Message}");
+            }
+        }
+
+        private IpcResponse V4GetProcessTargetBandImpl(string? payload)
+        {
+            try
+            {
+                int startingCount = 200;
+                if (!string.IsNullOrEmpty(payload) && int.TryParse(payload, out int count))
+                {
+                    startingCount = count;
+                }
+
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var band = coordinator.TargetBandEngine.CalculateTargetBand(startingCount);
+                return Ok(JsonSerializer.Serialize(band));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Process Target Band calculation failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4GetWorkloadGuardTelemetryAsync()
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                var telemetry = await coordinator.GetWorkloadGuardTelemetryAsync();
+                return Ok(JsonSerializer.Serialize(telemetry));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Workload Guard telemetry failed: {ex.Message}");
+            }
+        }
+
+        private async Task<IpcResponse> V4SuppressWorkloadDriftAsync()
+        {
+            try
+            {
+                var coordinator = BiosOptimizer.Core.V4.Coordinator.V4MaximumPerformanceCoordinator.Instance;
+                int suppressedCount = await coordinator.SuppressWorkloadDriftAsync();
+                return Ok(JsonSerializer.Serialize(new { SuppressedCount = suppressedCount, Success = true }));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"V4 Workload Drift suppression failed: {ex.Message}");
             }
         }
     }

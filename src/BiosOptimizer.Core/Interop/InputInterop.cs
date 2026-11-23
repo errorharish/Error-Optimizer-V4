@@ -99,6 +99,10 @@ namespace BiosOptimizer.Core.Interop
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, uint pvParam, uint fWinIni);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+
         [DllImport("gdi32.dll")]
         public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
 
@@ -122,6 +126,8 @@ namespace BiosOptimizer.Core.Interop
         public const uint SPI_SETSOUNDSENTRY = 0x0041;
         public const uint SPI_GETMOUSE = 0x0003;
         public const uint SPI_SETMOUSE = 0x0004;
+        public const uint SPI_GETMOUSESPEED = 0x0070;
+        public const uint SPI_SETMOUSESPEED = 0x0071;
         public const uint SPI_GETMOUSETRAILS = 0x005E;
         public const uint SPI_SETMOUSETRAILS = 0x005D;
         public const uint SPI_GETKEYBOARDDELAY = 0x0016;
@@ -134,5 +140,24 @@ namespace BiosOptimizer.Core.Interop
 
         public const int LOGPIXELSX = 88;
         public const int LOGPIXELSY = 90;
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RAWINPUTDEVICELIST
+        {
+            public IntPtr hDevice;
+            public uint dwType;
+        }
+
+        public const uint RIM_TYPEMOUSE = 0;
+        public const uint RIM_TYPEKEYBOARD = 1;
+        public const uint RIM_TYPEHID = 2;
+
+        public const uint RIDI_DEVICENAME = 0x20000007;
+        public const uint RIDI_DEVICEINFO = 0x2000000b;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern uint GetRawInputDeviceList([In, Out] RAWINPUTDEVICELIST[]? pRawInputDeviceList, ref uint puiNumDevices, uint cbSize);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern uint GetRawInputDeviceInfo(IntPtr hDevice, uint uiCommand, IntPtr pData, ref uint pcbSize);
     }
 }

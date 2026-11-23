@@ -29,10 +29,18 @@ public class ProcessCandidate
     public bool IsSelected { get; set; }
     public string Reason { get; set; } = string.Empty;
     public string DetectionTime { get; set; } = string.Empty;
+    public bool IsDuplicate { get; set; }
+    public int DuplicateCount { get; set; }
+    public int ParentProcessId { get; set; }
+    public string ParentProcessName { get; set; } = string.Empty;
+    public bool HasAutoRestartPolicy { get; set; }
+    public string AutoRestartTrigger { get; set; } = string.Empty;
 }
 
 public interface IProcessReductionEngine
 {
     System.Threading.Tasks.Task<List<ProcessCandidate>> ScanProcessesAsync();
     int TerminateProcesses(IEnumerable<int> processIdsToKill);
+    bool SuppressBackgroundDaemonsForWorkload(string workloadName, IEnumerable<string> daemonNames);
+    int RestoreSuppressedDaemons();
 }

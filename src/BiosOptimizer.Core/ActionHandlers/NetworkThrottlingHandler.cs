@@ -49,19 +49,19 @@ public class NetworkThrottlingHandler : IActionHandler
             using var key = Registry.LocalMachine.CreateSubKey(TargetKey);
             if (key != null)
             {
-                // Capture before state into Universal Backup Manager
-                try
+                // Capture before state into Universal Backup Manager and verify SHA-256 integrity before mutating
+                var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureNetworkTweak(
+                    entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+                    "Network Throttling Index",
+                    @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
+                    currentValueStr,
+                    expectedStr,
+                    "SAFE"
+                );
+                if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
                 {
-                    BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureNetworkTweak(
-                        "Manual",
-                        "Network Throttling Index",
-                        @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
-                        currentValueStr,
-                        expectedStr,
-                        "SAFE"
-                    );
+                    return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = bkErr };
                 }
-                catch { }
 
                 key.SetValue(ValueName, unchecked((int)val), RegistryValueKind.DWord);
                 

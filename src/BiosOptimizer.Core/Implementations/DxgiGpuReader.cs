@@ -13,6 +13,14 @@ namespace BiosOptimizer.Core.Implementations
         public ulong DedicatedVideoMemoryBytes { get; set; }
         public ulong DedicatedSystemMemoryBytes { get; set; }
         public ulong SharedSystemMemoryBytes { get; set; }
+        public ulong DedicatedVramUsageBytes { get; set; }
+        public ulong DedicatedVramBudgetBytes { get; set; }
+        public double DedicatedVramTotalGb => DedicatedVideoMemoryBytes > 0
+            ? Math.Round(DedicatedVideoMemoryBytes / (1024.0 * 1024.0 * 1024.0), 2)
+            : 0.0;
+        public double DedicatedVramUsedGb => DedicatedVramUsageBytes > 0
+            ? Math.Round(DedicatedVramUsageBytes / (1024.0 * 1024.0 * 1024.0), 2)
+            : 0.0;
         public uint Flags { get; set; }
         public bool IsSoftwareAdapter { get; set; }
         public bool IsDedicatedGpu { get; set; }
@@ -20,10 +28,23 @@ namespace BiosOptimizer.Core.Implementations
         public string SharedMemoryFormatted { get; set; } = "Dynamic";
         public string ReservedMemoryFormatted { get; set; } = "";
         public string AdapterTypeString => IsDedicatedGpu ? "DEDICATED GPU" : "INTEGRATED GPU";
+        public long AdapterLuid { get; set; }
+        public string AdapterLuidHex { get; set; } = "";
     }
 
     public static class DxgiGpuReader
     {
+        private const int DXGI_MEMORY_SEGMENT_GROUP_LOCAL = 0;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DXGI_QUERY_VIDEO_MEMORY_INFO
+        {
+            public ulong Budget;
+            public ulong CurrentUsage;
+            public ulong AvailableForReservation;
+            public ulong CurrentReservation;
+        }
+
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct DXGI_ADAPTER_DESC1
         {
@@ -58,6 +79,34 @@ namespace BiosOptimizer.Core.Implementations
 
             // IDXGIAdapter1
             [PreserveSig] int GetDesc1(out DXGI_ADAPTER_DESC1 pDesc);
+        }
+
+        [ComImport]
+        [Guid("645967A4-1392-4310-A798-8053CE3E93FD")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IDXGIAdapter3
+        {
+            // IDXGIObject
+            [PreserveSig] int SetPrivateData(ref Guid Name, uint DataSize, IntPtr pData);
+            [PreserveSig] int SetPrivateDataInterface(ref Guid Name, [MarshalAs(UnmanagedType.IUnknown)] object pUnknown);
+            [PreserveSig] int GetPrivateData(ref Guid Name, ref uint pDataSize, IntPtr pData);
+            [PreserveSig] int GetParent(ref Guid riid, out IntPtr ppParent);
+
+            // IDXGIAdapter
+            [PreserveSig] int EnumOutputs(uint Output, out IntPtr ppOutput);
+            [PreserveSig] int GetDesc(IntPtr pDesc);
+            [PreserveSig] int CheckInterfaceSupport(ref Guid InterfaceName, out long pUMDVersion);
+
+            // IDXGIAdapter1
+            [PreserveSig] int GetDesc1(out DXGI_ADAPTER_DESC1 pDesc);
+
+            // IDXGIAdapter2
+            [PreserveSig] int GetDesc2(IntPtr pDesc);
+
+            // IDXGIAdapter3
+            [PreserveSig] int RegisterHardwareContentProtectionTeardownStatusEvent(IntPtr hEvent, out uint pdwCookie);
+            [PreserveSig] void UnregisterHardwareContentProtectionTeardownStatusEvent(uint dwCookie);
+            [PreserveSig] int QueryVideoMemoryInfo(uint NodeIndex, int MemorySegmentGroup, out DXGI_QUERY_VIDEO_MEMORY_INFO pVideoMemoryInfo);
         }
 
         [ComImport]
@@ -116,6 +165,23 @@ namespace BiosOptimizer.Core.Implementations
                                 ulong dedicatedVideo = (ulong)desc.DedicatedVideoMemory.ToUInt64();
                                 ulong dedicatedSystem = (ulong)desc.DedicatedSystemMemory.ToUInt64();
                                 ulong sharedSystem = (ulong)desc.SharedSystemMemory.ToUInt64();
+                                long luid = desc.AdapterLuid;
+                                uint high = (uint)((ulong)luid >> 32);
+                                uint low = (uint)(luid & 0xFFFFFFFF);
+                                string luidHex = $"0x{high:x8}_0x{low:x8}";
+
+                                ulong vramUsageBytes = 0;
+                                ulong vramBudgetBytes = 0;
+                                try
+                                {
+                                    if (adapter is IDXGIAdapter3 adapter3 &&
+                                        adapter3.QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, out var memInfo) == 0)
+                                    {
+                                        vramUsageBytes = memInfo.CurrentUsage;
+                                        vramBudgetBytes = memInfo.Budget;
+                                    }
+                                }
+                                catch { }
 
                                 var info = new DxgiAdapterInfo
                                 {
@@ -125,8 +191,12 @@ namespace BiosOptimizer.Core.Implementations
                                     DedicatedVideoMemoryBytes = dedicatedVideo,
                                     DedicatedSystemMemoryBytes = dedicatedSystem,
                                     SharedSystemMemoryBytes = sharedSystem,
+                                    DedicatedVramUsageBytes = vramUsageBytes,
+                                    DedicatedVramBudgetBytes = vramBudgetBytes,
                                     Flags = desc.Flags,
-                                    IsSoftwareAdapter = isSoftware
+                                    IsSoftwareAdapter = isSoftware,
+                                    AdapterLuid = luid,
+                                    AdapterLuidHex = luidHex
                                 };
 
                                 ClassifyGpuMemory(info);
@@ -169,31 +239,34 @@ namespace BiosOptimizer.Core.Implementations
                                             name.Contains("rtx") || 
                                             name.Contains("gtx") ||
                                             name.Contains("quadro") ||
-                                            name.Contains("arc a") || 
-                                            (name.Contains("radeon rx") && !name.Contains("radeon(tm)"));
+                                            (info.VendorId == 0x8086 && name.Contains("arc")) ||
+                                            name.Contains("arc a") ||
+                                            name.Contains("arc b") ||
+                                            (name.Contains("radeon") && (name.Contains(" rx") || name.Contains(" pro") || name.Contains("xt"))) ||
+                                            name.Contains("radeon rx");
 
-            bool isExplicitIntegratedName = name.Contains("intel") && !name.Contains("arc") ||
+            bool isExplicitIntegratedName = (name.Contains("intel") && !name.Contains("arc")) ||
                                            name.Contains("uhd graphics") ||
                                            name.Contains("iris") ||
                                            name.Contains("hd graphics") ||
                                            name.Contains("radeon(tm) graphics") ||
                                            name.Contains("radeon graphics") ||
-                                           name.Contains("vega");
+                                           (name.Contains("vega") && !name.Contains("radeon rx"));
 
             // Decision Matrix:
-            // If DedicatedVideoMemory >= 1 GB (1073741824 bytes), and not an explicit Intel iGPU driver stub, it is true dedicated VRAM.
+            // If DedicatedVideoMemory >= 1 GB (1073741824 bytes), and not an explicit Intel/AMD iGPU driver stub, it is true dedicated VRAM.
             if (dedicated >= 1024 * 1024 * 1024L && (isExplicitDedicatedVendor || !isExplicitIntegratedName))
             {
                 info.IsDedicatedGpu = true;
                 double gb = dedicated / (1024.0 * 1024.0 * 1024.0);
                 double roundGb = Math.Round(gb);
-                if (Math.Abs(gb - roundGb) <= 0.35)
+                if (roundGb >= 1 && Math.Abs(gb - roundGb) <= 0.15)
                 {
                     info.DedicatedVramFormatted = $"{roundGb:F0} GB";
                 }
                 else
                 {
-                    info.DedicatedVramFormatted = $"{gb:F1} GB";
+                    info.DedicatedVramFormatted = $"{gb:F2} GB";
                 }
             }
             else

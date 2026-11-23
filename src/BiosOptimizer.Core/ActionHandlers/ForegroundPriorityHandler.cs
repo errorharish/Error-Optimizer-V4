@@ -37,6 +37,21 @@ public class ForegroundPriorityHandler : IActionHandler
 
         try
         {
+            var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
+                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+                $"Win32PrioritySeparation → 0x{val:X2}",
+                "HKLM",
+                TargetKey,
+                ValueName,
+                currentValueStr == "Unknown" ? "VALUE DID NOT EXIST" : currentValueStr,
+                "DWord",
+                val,
+                "SAFE");
+            if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+            {
+                return new OptimizationResult { Status = ResultStatus.Failed, ItemId = ValueName, DisplayName = entry.DisplayName, Message = bkErr };
+            }
+
             using var key = Registry.LocalMachine.CreateSubKey(TargetKey);
             if (key != null)
             {

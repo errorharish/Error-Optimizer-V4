@@ -16,19 +16,24 @@ namespace BiosOptimizer.Core.Implementations
 
     public class HardwareProfile
     {
+        public int CpuPhysicalCores { get; set; } = Environment.ProcessorCount;
         public int CpuLogicalCores { get; set; } = Environment.ProcessorCount;
         public string CpuModel { get; set; } = "Unknown CPU";
-        public double RamTotalGb { get; set; } = 8.0;
-        public double RamAvailableGb { get; set; } = 4.0;
-        public double RamUsagePercent { get; set; } = 50.0;
+        public double InstalledRamGb { get; set; }
+        public double RamTotalGb { get; set; }
+        public double RamHardwareReservedGb { get; set; }
+        public double RamAvailableGb { get; set; }
+        public double RamUsagePercent { get; set; }
         public bool GpuPresent { get; set; }
-        public string GpuName { get; set; } = "Standard Display Adapter";
+        public string GpuName { get; set; } = "Unavailable";
         public double GpuVramGb { get; set; }
+        public bool GpuIsDedicated { get; set; }
         public bool IsBatteryPowered { get; set; }
-        public int BatteryPercent { get; set; } = 100;
-        public string StorageType { get; set; } = "SSD";
+        public int BatteryPercent { get; set; }
+        public bool HasBattery { get; set; }
+        public string StorageType { get; set; } = "Fixed Storage";
         public double TotalFreeDiskSpaceGb { get; set; }
-        public string WindowsVersion { get; set; } = "Windows 11 / 10";
+        public string WindowsVersion { get; set; } = "Windows";
         public string WindowsBuild { get; set; } = "Unknown";
         public HardwareTier Tier { get; set; } = HardwareTier.Normal;
         public string TierDescription => Tier switch
@@ -97,6 +102,7 @@ namespace BiosOptimizer.Core.Implementations
 
                 var profile = new HardwareProfile
                 {
+                    CpuPhysicalCores = HardwareDetectionService.DetectPhysicalCoreCount() ?? Math.Max(1, Environment.ProcessorCount),
                     CpuLogicalCores = Math.Max(1, Environment.ProcessorCount)
                 };
 
@@ -125,6 +131,26 @@ namespace BiosOptimizer.Core.Implementations
                         profile.RamAvailableGb = Math.Round((double)mem.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 1);
                         profile.RamUsagePercent = mem.dwMemoryLoad;
                     }
+                    double? smbiosGb = HardwareDetectionService.DetectInstalledRamGb();
+                    profile.InstalledRamGb = (smbiosGb.HasValue && smbiosGb.Value > 0) ? smbiosGb.Value : profile.RamTotalGb;
+                    profile.RamHardwareReservedGb = Math.Max(0, Math.Round(profile.InstalledRamGb - profile.RamTotalGb, 2));
+                }
+                catch { }
+
+                // 2b. Fast DXGI GPU Detection (<5ms, zero WMI overhead)
+                try
+                {
+                    var dxgi = DxgiGpuReader.EnumerateAdapters();
+                    if (dxgi.Count > 0)
+                    {
+                        var primary = dxgi.Find(a => a.IsDedicatedGpu) ?? dxgi[0];
+                        profile.GpuPresent = true;
+                        profile.GpuName = primary.Description;
+                        profile.GpuIsDedicated = primary.IsDedicatedGpu;
+                        profile.GpuVramGb = primary.DedicatedVideoMemoryBytes > 0
+                            ? Math.Round(primary.DedicatedVideoMemoryBytes / (1024.0 * 1024.0 * 1024.0), 2)
+                            : 0.0;
+                    }
                 }
                 catch { }
 
@@ -133,25 +159,24 @@ namespace BiosOptimizer.Core.Implementations
                 {
                     if (GetSystemPowerStatus(out var pwr))
                     {
+                        bool hasBatt = (pwr.BatteryFlag & 128) == 0 && pwr.BatteryFlag != 255;
+                        profile.HasBattery = hasBatt;
                         profile.IsBatteryPowered = pwr.ACLineStatus == 0;
-                        profile.BatteryPercent = pwr.BatteryLifePercent <= 100 ? pwr.BatteryLifePercent : 100;
+                        profile.BatteryPercent = hasBatt && pwr.BatteryLifePercent <= 100 ? pwr.BatteryLifePercent : 0;
                     }
                 }
                 catch { }
 
-                // 4. Storage Free Space & Type (<5ms)
+                // 4. Storage Free Space (<5ms, deduplicated fixed volumes)
                 try
                 {
                     double totalFree = 0;
-                    foreach (var drive in DriveInfo.GetDrives())
+                    foreach (var drive in BiosOptimizer.Core.Implementations.Storage.StorageEngine.GetUniqueFixedDrives())
                     {
-                        if (drive.IsReady && drive.DriveType == DriveType.Fixed)
-                        {
-                            totalFree += (double)drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
-                        }
+                        totalFree += (double)drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
                     }
                     profile.TotalFreeDiskSpaceGb = Math.Round(totalFree, 1);
-                    profile.StorageType = "SSD / NVMe";
+                    profile.StorageType = "Fixed Storage";
                 }
                 catch { }
 
@@ -181,14 +206,16 @@ namespace BiosOptimizer.Core.Implementations
 
         public static HardwareTier ClassifyMachine(HardwareProfile p)
         {
+            double effectiveRamGb = p.InstalledRamGb > 0 ? p.InstalledRamGb : p.RamTotalGb;
+
             // Low-Resource Trigger: <= 6 GB RAM, <= 4 cores, or low battery on battery power
-            if (p.RamTotalGb <= 6.5 || p.CpuLogicalCores <= 4 || (p.IsBatteryPowered && p.BatteryPercent <= 20))
+            if (effectiveRamGb <= 6.5 || p.CpuLogicalCores <= 4 || (p.IsBatteryPowered && p.BatteryPercent <= 20))
             {
                 return HardwareTier.LowResource;
             }
 
             // High-Performance Trigger: >= 24 GB RAM, >= 8 cores, AC power, and >= 20 GB free disk
-            if (p.RamTotalGb >= 23.5 && p.CpuLogicalCores >= 8 && !p.IsBatteryPowered && p.TotalFreeDiskSpaceGb >= 20)
+            if (effectiveRamGb >= 23.5 && p.CpuLogicalCores >= 8 && !p.IsBatteryPowered && p.TotalFreeDiskSpaceGb >= 20)
             {
                 return HardwareTier.HighPerformance;
             }

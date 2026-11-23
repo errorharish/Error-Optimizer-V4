@@ -87,6 +87,9 @@ namespace BiosOptimizer.Core.Implementations.Power
         public bool Applied { get; set; }
         public bool RequiresReboot { get; set; }
         public bool Verified { get; set; }
+        public string SettingGuidStr => SettingGuid.ToString().ToLowerInvariant();
+        public string SubgroupGuidStr => SubgroupGuid.ToString().ToLowerInvariant();
+        public string Status => !Supported ? "UNSUPPORTED" : (Verified ? "VERIFIED" : (Applied ? "APPLIED_UNVERIFIED" : "FAILED"));
     }
 
     public class PowerPlanItem
@@ -105,6 +108,7 @@ namespace BiosOptimizer.Core.Implementations.Power
         public string Owner { get; set; } = "Windows"; // "Windows", "ErrorOptimizer", "OEM"
         public string PlanType { get; set; } = "CUSTOM"; // "AI_BATTERY_EFFICIENCY", "AI_MAX_PERFORMANCE", "CUSTOM", "WINDOWS_BUILTIN", "OEM_VENDOR"
         public string BasePlanName { get; set; } = string.Empty;
+        public string BasePlanGuid { get; set; } = string.Empty;
         public PowerPlanStatus Status { get; set; } = PowerPlanStatus.Available;
         
         public List<PowerPlanSettingItem> Settings { get; set; } = new();
@@ -191,6 +195,7 @@ namespace BiosOptimizer.Core.Implementations.Power
         public double StorageFreeGb { get; set; } = 100.0;
         public bool IsBatteryPowered { get; set; }
         public int BatteryPercent { get; set; } = 100;
+        public bool IsModernStandby { get; set; }
         public string ThermalStatus { get; set; } = "UNKNOWN (Not exposed by OEM ACPI)";
         public string TierClassification { get; set; } = "HIGH PERFORMANCE";
         public string DetectedWorkload { get; set; } = "Standard Workload";
@@ -219,6 +224,13 @@ namespace BiosOptimizer.Core.Implementations.Power
         public string ActiveSchemeGuid { get; set; } = string.Empty;
         public string ActiveSchemeName { get; set; } = string.Empty;
         public bool Verified { get; set; }
+        public bool ActiveSchemeVerified { get; set; }
+        public int SettingsTotal { get; set; }
+        public int SettingsVerified { get; set; }
+        public int SettingsUnsupported { get; set; }
+        public int SettingsFailed { get; set; }
+        public string? BaseSchemeUsed { get; set; }
+        public bool ModernStandbyDetected { get; set; }
         public PowerPlanChangeSource Source { get; set; } = PowerPlanChangeSource.USER_REQUEST;
         public List<PowerPlanSettingItem> VerifiedSettings { get; set; } = new();
     }

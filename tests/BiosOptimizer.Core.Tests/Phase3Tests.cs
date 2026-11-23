@@ -43,7 +43,7 @@ public class Phase3Tests
         var policy = new ProtectedTargetsPolicy();
         Assert.True(policy.IsProtectedTarget("Microsoft.Windows.SecHealthUI"));
         Assert.True(policy.IsProtectedTarget("Microsoft.WindowsStore"));
-        Assert.False(policy.IsProtectedTarget("SpotifyAB.SpotifyMusic"));
+        Assert.False(policy.IsProtectedTarget("Microsoft.BingNews"));
         Assert.False(policy.IsProtectedTarget("king.com.CandyCrushSaga"));
     }
 }

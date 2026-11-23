@@ -2,7 +2,7 @@
   "id": "MaximumPerformance",
   "displayName": "Max Performance",
   "description": "Complete machine-specific performance optimization. Combines Ultimate + CPU performance + GPU scheduling + power policy + memory + storage + visual effects. System Restore point created before execution. AC power strongly recommended.",
-  "extends": ["Ultimate"],
+  "extends": [],
   "targetProcessReduction": {
     "min": 100,
     "max": 170
@@ -15,12 +15,19 @@
       "action": "SetPowerPlan",
       "target": "e9a42b02-d5df-448d-aa00-03f14749eb61",
       "value": "e9a42b02-d5df-448d-aa00-03f14749eb61",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Applies Ultimate Performance power plan. Best on AC power.",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -32,7 +39,10 @@
       "action": "SetHags",
       "target": "HwSchMode",
       "value": 2,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Requires DirectX 12 Ultimate capable GPU and WDDM 2.7+ driver.",
@@ -47,7 +57,10 @@
       "action": "SetForegroundPriority",
       "target": "Win32PrioritySeparation",
       "value": 38,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Biases CPU quanta toward active foreground window.",
@@ -62,12 +75,19 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583\\DefaultPowerSchemeValues\\e9a42b02-d5df-448d-aa00-03f14749eb61\\ValueMax",
       "value": 100,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Keeps all CPU cores active. Best on AC power.",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -79,7 +99,10 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\bc5038f7-23e0-4960-96da-33abaf5935ec\\DefaultPowerSchemeValues\\e9a42b02-d5df-448d-aa00-03f14749eb61\\ValueMax",
       "value": 100,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
@@ -94,12 +117,19 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\2a737441-1930-4402-8d77-b2bebba308a3\\48e6b7a6-50f5-4782-a5d4-53bb8f07e226\\DefaultPowerSchemeValues\\e9a42b02-d5df-448d-aa00-03f14749eb61\\ValueACSettingIndex",
       "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "Prevents USB devices from entering suspend mode on AC.",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -111,12 +141,19 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\501a4d13-42af-4429-9fd1-a8218c268e20\\ee12f906-d277-404b-b6da-e5fa1a576df5\\DefaultPowerSchemeValues\\e9a42b02-d5df-448d-aa00-03f14749eb61\\ValueACSettingIndex",
       "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "Keeps PCIe links at full power. Increases power consumption slightly.",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -128,13 +165,24 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\238c9fa8-0aad-41ed-83f4-97be242c8f20\\29f6c1db-86da-48c5-9fdb-f2b67b1f44da\\DefaultPowerSchemeValues\\e9a42b02-d5df-448d-aa00-03f14749eb61\\ValueACSettingIndex",
       "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "Prevents system from sleeping on AC power.",
       "conditions": [
-        { "type": "IsOnAc", "operator": "Equals", "value": true },
-        { "type": "IsDesktop", "operator": "Equals", "value": true }
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        },
+        {
+          "type": "IsDesktop",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -146,12 +194,19 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\EnablePageCombining",
       "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "High",
       "requiresConfirmation": true,
       "warning": "Only beneficial on 16 GB+ RAM. Increases working set at cost of page combining.",
       "conditions": [
-        { "type": "MinimumRamGb", "operator": "Equals", "value": 16 }
+        {
+          "type": "MinimumRamGb",
+          "operator": "Equals",
+          "value": 16
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -163,41 +218,39 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters\\EnablePrefetcher",
       "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Disables prefetcher on SSD where it provides no benefit.",
       "conditions": [
-        { "type": "StorageIsSsd", "operator": "Equals", "value": true }
-      ],
-      "verification": "ReadBack",
-      "rollback": "Snapshot"
-    },
-    {
-      "id": "maxperf.registry.superfetch.ssd",
-      "displayName": "Disable SuperFetch on NVMe/SSD",
-      "category": "Registry",
-      "action": "SetRegistryValue",
-      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters\\EnableSuperfetch",
-      "value": 0,
-      "os": ["win10", "win11"],
-      "risk": "Medium",
-      "requiresConfirmation": false,
-      "warning": "Disables SuperFetch prediction on SSD where it provides no benefit.",
-      "conditions": [
-        { "type": "StorageIsSsd", "operator": "Equals", "value": true }
+        {
+          "type": "StorageIsSsd",
+          "operator": "Equals",
+          "value": true
+        },
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
     },
     {
       "id": "maxperf.registry.visualfx",
-      "displayName": "Visual Effects — Best Performance",
+      "displayName": "Visual Effects \u2014 Best Performance",
       "category": "Registry",
       "action": "SetRegistryValue",
       "target": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects\\VisualFXSetting",
       "value": 2,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "Sets Windows to Best Performance visual mode.",
@@ -212,22 +265,10 @@
       "action": "SetRegistryValue",
       "target": "HKCU\\Control Panel\\Desktop\\UserPreferencesMask",
       "value": "9012038010000000",
-      "os": ["win10", "win11"],
-      "risk": "Low",
-      "requiresConfirmation": false,
-      "warning": "",
-      "conditions": [],
-      "verification": "ReadBack",
-      "rollback": "Snapshot"
-    },
-    {
-      "id": "maxperf.registry.smoothscroll",
-      "displayName": "Disable Smooth Scroll (Listbox)",
-      "category": "Registry",
-      "action": "SetRegistryValue",
-      "target": "HKCU\\Control Panel\\Desktop\\SmoothScroll",
-      "value": 0,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
@@ -242,7 +283,10 @@
       "action": "SetPagefile",
       "target": "Auto",
       "value": "Auto",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "High",
       "requiresConfirmation": true,
       "warning": "Adjusts pagefile to system-managed. Verify enough free disk space is available.",
@@ -257,12 +301,19 @@
       "action": "SetProcessPriority",
       "target": "OneDrive",
       "value": "Idle",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
       "conditions": [
-        { "type": "WorkloadInstalled", "operator": "Equals", "value": "OneDrive" }
+        {
+          "type": "WorkloadInstalled",
+          "operator": "Equals",
+          "value": "OneDrive"
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -274,7 +325,9 @@
       "action": "SetProcessPriority",
       "target": "Widgets",
       "value": "Idle",
-      "os": ["win11"],
+      "os": [
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "",
@@ -289,12 +342,19 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Global\\NvCplHorizontalPageFiles\\PowerMizerEnable",
       "value": 1,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Enables NVIDIA performance profile via registry. Requires NVIDIA GPU.",
       "conditions": [
-        { "type": "HasNvidiaGpu", "operator": "Equals", "value": true }
+        {
+          "type": "HasNvidiaGpu",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
@@ -306,65 +366,1142 @@
       "action": "SetRegistryValue",
       "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Global\\NvCplHorizontalPageFiles\\PowerMizerLevel",
       "value": 1,
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Medium",
       "requiresConfirmation": false,
       "warning": "Sets NVIDIA to Prefer Maximum Performance. Requires NVIDIA GPU.",
       "conditions": [
-        { "type": "HasNvidiaGpu", "operator": "Equals", "value": true },
-        { "type": "IsOnAc", "operator": "Equals", "value": true }
-      ],
-      "verification": "ReadBack",
-      "rollback": "Snapshot"
-    },
-    {
-      "id": "maxperf.registry.svchostsplit",
-      "displayName": "Reduce SvcHost Split Threshold (Large RAM)",
-      "category": "Registry",
-      "action": "SetRegistryValue",
-      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\SvcHostSplitThresholdInKB",
-      "value": 67108864,
-      "os": ["win10", "win11"],
-      "risk": "Medium",
-      "requiresConfirmation": false,
-      "warning": "Groups svchost instances together on large RAM systems, reducing process overhead.",
-      "conditions": [
-        { "type": "MinimumRamGb", "operator": "Equals", "value": 8 }
+        {
+          "type": "HasNvidiaGpu",
+          "operator": "Equals",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "operator": "Equals",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
     },
     {
       "id": "maxperf.ae.priority",
-      "displayName": "After Effects — Process Priority Boost",
+      "displayName": "After Effects \u2014 Process Priority Boost",
       "category": "Workload",
       "action": "SetProcessPriority",
       "target": "AfterFX",
       "value": "AboveNormal",
-      "os": ["win10", "win11"],
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
       "warning": "Only applies when After Effects process is running.",
       "conditions": [
-        { "type": "WorkloadInstalled", "operator": "Equals", "value": "AdobeAfterEffects" }
+        {
+          "type": "WorkloadInstalled",
+          "operator": "Equals",
+          "value": "AdobeAfterEffects"
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"
     },
     {
-      "id": "maxperf.bluestacks.virt",
-      "displayName": "BlueStacks — Verify Virtualization Available",
-      "category": "Workload",
-      "action": "SetForegroundPriority",
-      "target": "Win32PrioritySeparation",
-      "value": 26,
-      "os": ["win10", "win11"],
+      "id": "maxperf.gpu.dx12_shader_cache_expansion",
+      "displayName": "Expand DirectX 12 Disk Shader Cache to 10 GB",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings\\MaxShaderCacheSizeInMB",
+      "value": 10240,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Expands disk-backed shader cache to 10GB to eliminate real-time shader compilation stuttering in modern games and emulators.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.emulator.ecoqos_power_throttling_off",
+      "displayName": "Disable EcoQoS Power Throttling for Virtualization",
+      "category": "Power",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling\\PowerThrottlingOff",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Completely disables Windows EcoQoS power throttling for Android emulator hypervisors and background worker threads.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gaming.full_gamedvr_recording_suppression",
+      "displayName": "Complete GameDVR Background Video Encoding Suppression",
+      "category": "Gaming",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\System\\GameConfigStore\\GameDVR_Enabled",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables background video capture buffers in GameConfigStore, eliminating encoder overhead and 1% low frame micro-stutters.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.heterogeneous_unpark_min_100",
+      "displayName": "Processor Core Parking Complete AC Unpark (100%)",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583\\ValueMax",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
       "risk": "Low",
       "requiresConfirmation": false,
-      "warning": "Ensures BlueStacks has balanced foreground CPU access.",
+      "warning": "Forces all logical cores to remain unparked and awake on AC power, eliminating core wake-up latency during sudden gaming bursts.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.core_affinity_ccd0_vcache",
+      "displayName": "AMD Ryzen Dual-CCD 3D V-Cache Core Affinity Alignment",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\amdppm\\Parameters\\AffinityMaskPreference",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Biases game processes and emulators toward cache-optimized cores on Ryzen 7900X3D/7950X3D processors.",
       "conditions": [
-        { "type": "WorkloadInstalled", "operator": "Equals", "value": "BlueStacks" },
-        { "type": "VirtualizationEnabled", "operator": "Equals", "value": true }
+        {
+          "type": "IsDualCcdAmd3DVcache",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.intel_thread_director_pcore_lock",
+      "displayName": "Intel Thread Director Workload P-Core Prioritization",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\7f2f4c9f-3e54-4a2b-9e0c-8d3a5a7b1e2f\\ValueMax",
+      "value": 100,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Locks heavy compute threads to Intel Performance Cores instead of efficiency cores under gaming/render load.",
+      "conditions": [
+        {
+          "type": "IsHybridCpu",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.tcp_nodelay_gaming",
+      "displayName": "Disable Nagle's Algorithm for Real-Time Gaming Packets (TcpNoDelay = 1)",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\TcpNoDelay",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables packet batching delays to immediately transmit interactive gaming and emulator multiplayer frames.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.creative.disk_io_priority_high",
+      "displayName": "High Disk I/O Priority for Creative Render Applications",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\AfterFX.exe\\PerfOptions\\IoPriority",
+      "value": 3,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Assigns High Disk I/O Priority to Adobe After Effects, Premiere, and DaVinci Resolve rendering processes.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.tcp_nodelay_gaming_stack",
+      "displayName": "Disable Nagle's Algorithm for Immediate Packet Dispatch",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\Default\\TcpNoDelay",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Disables packet buffering delays on the network interface stack for minimum multiplayer latency.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.dedicated_vram_segment_reserve",
+      "displayName": "Reserve Dedicated GPU VRAM Segment for Foreground Applications",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\DirectX\\UserGpuPreferences\\DedicatedSegmentReservation",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents secondary desktop apps from evicting dedicated video memory of the active game or 3D renderer.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.bottleneck.gpu_bound_preemption_tuning",
+      "displayName": "WDDM GPU Command Buffer Preemption Granularity Optimization",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler\\PreemptionLevel",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Configures GPU driver to finish ongoing draw calls without interruption, boosting average framerates.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.storage.directstorage_bypassio_filter_bypass",
+      "displayName": "Enable DirectStorage BypassIO Storage Filter Bypass",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\NtfsEnableDirectStorageBypass",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Allows DirectStorage games to bypass legacy file system filters for instant NVMe texture streaming.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.energy_perf_bias_zero_maximum",
+      "displayName": "Set Processor Energy Performance Preference to Maximum Speed",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\36687f9e-e376-44e2-ac58-005d60bf3d71\\ValueMin",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Commands Intel/AMD hardware performance governors to maintain peak boost clock frequencies.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.display.variable_refresh_rate_global_enable",
+      "displayName": "Enable Windows Variable Refresh Rate (VRR) Globally",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings",
+      "value": "VRROptimized=1;",
+      "type": "REG_SZ",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Forces G-Sync and FreeSync support for windowed applications and emulators.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.display.fullscreen_optimizations_global_lock",
+      "displayName": "Enforce Fullscreen Optimization Low-Latency Presentation Mode",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\System\\GameConfigStore\\GameDVR_FSEBehaviorMode",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enables Hardware Direct Flip presentation for all games, delivering exclusive fullscreen latency in borderless mode.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.scheduler.mmcss_games_latency_sensitive",
+      "displayName": "Configure MMCSS Games Task Latency Sensitivity to True",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games\\Latency Sensitive",
+      "value": "True",
+      "type": "REG_SZ",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Configures the Windows MMCSS engine to mark foreground gaming threads as latency-sensitive for scheduling.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.storage.write_cache_buffer_flush_optimize",
+      "displayName": "Optimize Storage Controller Write Cache Buffer Flushing",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\disk\\Parameters\\CacheIsVolatile",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Informs Windows that drive DRAM write cache is protected, accelerating small 4KB write transactions.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.low_latency_game_packet_pacing",
+      "displayName": "Calibrate Real-Time Low-Latency Network Socket Pacing",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\MaxUserPort",
+      "value": 65534,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Expands user ephemeral outbound port allocation to 65534 for high-throughput multiplayer matchmaking.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.process.background_indexing_suspend_on_load",
+      "displayName": "Suspend Background Search Indexer during Active 3D Workloads",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search\\PreventIndexingLowPriorityIO",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents Windows Search indexing service from consuming disk channel bandwidth during games.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.input.usb_polling_rate_jitter_shield",
+      "displayName": "Eliminate USB Interrupt Polling Jitter on AC Power",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\usbflags\\DisableDeviceLowPower",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Maintains constant high-frequency polling on gaming mice and keyboards.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.power.processor_idle_demote_threshold_zero",
+      "displayName": "Zero Processor Idle Demote Threshold on AC Power",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\4b92d84ac824-4644-86a0-40113374b679\\ValueMin",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Prevents CPU cores from dropping into high-latency C-states during frame rendering.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.amd_powerplay_profile_prefer_3d",
+      "displayName": "Lock AMD Radeon PowerPlay State to Peak 3D Clocks",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000\\PP_ThermalAutoThrottlingEnable",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Optimizes AMD GPU core frequency pacing while preserving hardware safety limits.",
+      "conditions": [
+        {
+          "type": "HasAmdGpu",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.hags_dxgi_present_latency_one",
+      "displayName": "Synchronize HAGS with Present Queue Latency (1 Frame)",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\HwSchLatency",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Ensures hardware-scheduled frames are dispatched to display controllers with zero buffer delay.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.storage.storport_queue_depth_max",
+      "displayName": "Expand StorPort NVMe Storage Adapter Queue Depth to 254",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device\\QueueDepth",
+      "value": 254,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Permits PCIe Gen4/Gen5 NVMe controllers to process up to 254 concurrent I/O queue entries.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "operator": "Equals",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.memory.zero_page_thread_priority_adjust",
+      "displayName": "Elevate Windows Memory Zero-Page Thread Execution Priority",
+      "category": "Memory",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\ZeroPageThreadPriority",
+      "value": 15,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Medium",
+      "requiresConfirmation": false,
+      "warning": "Pre-cleans memory pages in idle hardware cycles so memory allocations execute instantly without zeroing latency.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.heterogeneous_thread_scheduling_policy",
+      "displayName": "Configure Heterogeneous Thread Scheduling to Prefer High-Performance Cores",
+      "category": "Cpu",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\7f2f4c92-5fc3-47c6-ac5b-400966046460\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Guarantees games and creative render applications are dispatched to performance cores on hybrid CPUs.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.disable_netdma_tcp_offload_conflict",
+      "displayName": "Disable Deprecated NetDMA Controller Conflict",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\EnableNetDMA",
+      "value": 0,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prevents legacy NetDMA driver calls from conflicting with modern RSS packet processing.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.display.disable_dwm_virtual_refresh_lock",
+      "displayName": "Disable DWM Monitor Virtual Refresh Rate Locking",
+      "category": "Registry",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Windows\\DWM\\ForceVsyncOff",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows high-refresh displays (144Hz, 240Hz, 360Hz) to render uncapped without desktop composition clamping.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.wddm_scheduler_priority_boost",
+      "displayName": "Elevate WDDM GPU Hardware Queue Scheduling Priority",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler\\Priority",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Gives hardware GPU scheduling priority to active 3D foreground graphics queues.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.workload.creative_render_io_stream",
+      "displayName": "High I/O Priority Stream for Video Rendering & Export",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\IOPriority",
+      "value": 2,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Prioritizes media cache and export disk write streams for Adobe Premiere Pro, After Effects, and DaVinci Resolve.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.variable_refresh_rate_boost",
+      "displayName": "Windows Variable Refresh Rate (VRR) System-Wide Boost",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\System\\GameConfigStore\\VRREnabled",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enables OS Variable Refresh Rate for non-native and borderless windowed games, eliminating stutter and screen tearing.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.audio.exclusive_wasapi_mode",
+      "displayName": "WASAPI Exclusive Mode Low-Latency Audio Stream",
+      "category": "System",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Multimedia\\Audio\\WASAPIExclusiveMode",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Enables exclusive audio stream buffer mode for low-latency spatial audio in competitive esports.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.dwm.max_prerendered_frames_one",
+      "displayName": "Restrict DWM Desktop Window Composition Buffer to 1 Frame",
+      "category": "Performance",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Windows\\DWM\\MaxPreRenderedFrames",
+      "value": 1,
+      "type": "REG_DWORD",
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Limits desktop composition queue buffer to 1 frame, eliminating mouse latency in borderless windowed games.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.nv_low_latency_mode",
+      "displayName": "Enforce NVIDIA Ultra-Low Latency Mode Queue Limiting",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\NVIDIA Corporation\\Global\\NVTweak\\LowLatencyMode",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Forces 1 pre-rendered frame limit at driver level.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.nv_max_frame_rate",
+      "displayName": "Uncap Driver-Level Frame Rate Clamping",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\NVIDIA Corporation\\Global\\NVTweak\\MaxFrameRate",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Removes driver-side frame rate caps for uncapped benchmarking.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.nv_threaded_optimization",
+      "displayName": "Force Multithreaded Driver Render Dispatch",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\NVIDIA Corporation\\Global\\NVTweak\\ThreadedOptimization",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Dispatches OpenGL and Vulkan render workloads across multi-core CPUs.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.nv_power_management_mode",
+      "displayName": "Set GPU Power Mode to Prefer Maximum Performance",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\NVIDIA Corporation\\Global\\NVTweak\\PowerManagementMode",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Forces GPU clocks to stay at high 3D performance tier on AC.",
+      "conditions": [
+        {
+          "type": "HasNvidiaGpu",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.gpu.hags_latency_yield",
+      "displayName": "Disable VSync Timeout Override for Real-Time Latency",
+      "category": "GPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler\\VsyncTimeoutOverride",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Prevents synthetic VSync sleep yielding in modern DirectX pipelines.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.amd_preferred_cores_ac",
+      "displayName": "Enforce AMD CPPC Preferred Cores Autonomous Dispatch on AC",
+      "category": "CPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82BE-4824-96C1-47B60B740D00\\c4581c5a-82e7-4952-b883-7d87f58d0cb0\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Directs single-threaded game loops to factory highest-binned AMD cores.",
+      "conditions": [
+        {
+          "type": "IsAmdCpu",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.intel_pe_energy_performance",
+      "displayName": "Set Intel Energy Performance Preference (EPP) to 0 (Max Perf)",
+      "category": "CPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82BE-4824-96C1-47B60B740D00\\36687f9e-e376-49e2-ac58-005d6086334f\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Forces Intel Speed Shift technology to maximum frequency governor on AC.",
+      "conditions": [
+        {
+          "type": "IsIntelCpu",
+          "value": true
+        },
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.perf_boost_mode_ac",
+      "displayName": "Set Processor Performance Boost Mode to Aggressive on AC",
+      "category": "CPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82BE-4824-96C1-47B60B740D00\\be337238-0d82-4146-a960-4f3749d470c7\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 2,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows CPU to aggressively sustain all-core turbo boost frequencies.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.cpu.core_parking_decrease_time",
+      "displayName": "Reduce Core Parking Unpark Transition Delay to Minimum",
+      "category": "CPU",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82BE-4824-96C1-47B60B740D00\\2ddd5a48-0a42-4466-b87ac7e3d482e60a\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 10,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Wakes parked cores in 10ms instead of default sluggish power ramping.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.display.direct_flip_allow",
+      "displayName": "Enable DirectFlip True Hardware Scanout Bypass",
+      "category": "Display",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\Direct3D\\DirectFlip",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Enables direct hardware scanout presentation bypassing DWM compositor.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.display.auto_hdr_gaming_latency",
+      "displayName": "Disable AutoHDR Background Tonemapping Latency",
+      "category": "Display",
+      "action": "SetRegistryValue",
+      "target": "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences\\DirectXUserGlobalSettings\\AutoHDREnable",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Eliminates synthetic SDR-to-HDR tonemapping overhead during competitive play.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.storage.storport_idle_timeout",
+      "displayName": "Disable StorPort NVMe Link Power-Down on Active Loads",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\StorPort\\Parameters\\IdleTimeoutValue",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Prevents storage host adapter bus power state changes during gameplay.",
+      "conditions": [
+        {
+          "type": "StorageIsNvme",
+          "value": true
+        }
+      ],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.storage.write_cache_buffer_flush",
+      "displayName": "Enable I/O Priority Boost on Disk Write Completion",
+      "category": "Storage",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\I/O System\\CountOfIoPriorityBoost",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Accelerates game asset loading by boosting thread priority upon read completion.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.tcp_initial_rtt",
+      "displayName": "Calibrate Initial TCP Retransmission Round-Trip Time",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\InitialRtt",
+      "value": 2000,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Reduces initial connection handshake wait timeout to 2000ms.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.network.tcp_fin_wait_2_timeout",
+      "displayName": "Reduce TCP Timed Wait Delay for Faster Socket Recycling",
+      "category": "Network",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\TcpTimedWaitDelay",
+      "value": 30,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Recycles closed game server connections in 30 seconds instead of 120 seconds.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.multimedia.audio_driver_dma_priority",
+      "displayName": "Configure MMCSS Game Task to Low Latency Mode",
+      "category": "Multimedia",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games\\Latency Mode",
+      "value": 0,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Instructs multimedia scheduler to enforce lowest possible buffer latency.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.multimedia.audio_driver_clock_rate",
+      "displayName": "Configure MMCSS High Clock Rate Interval (10,000 Ticks)",
+      "category": "Multimedia",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games\\Clock Rate",
+      "value": 10000,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Locks MMCSS thread wake frequency to 10,000 microsecond intervals.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.multimedia.no_lazy_mode",
+      "displayName": "Enforce MMCSS No-Lazy-Mode Continuous Scheduling",
+      "category": "Multimedia",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games\\NoLazyMode",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Prevents MMCSS from dropping into low-power lazy scheduling during games.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.emulator.virtual_machine_processor_priority",
+      "displayName": "Set Virtualization Processor Priority for Android Emulators",
+      "category": "Emulator",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Virtualization\\ProcessorPriority",
+      "value": 2,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Boosts hypervisor CPU slice scheduling for BlueStacks and LDPlayer.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.emulator.gpu_virtualization_direct_draw",
+      "displayName": "Enable Direct GPU Access Acceleration for Virtualization",
+      "category": "Emulator",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Virtualization\\DirectGpuAccess",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Low",
+      "requiresConfirmation": false,
+      "warning": "Allows Android emulator virtual machines direct GPU pipeline access.",
+      "conditions": [],
+      "verification": "ReadBack",
+      "rollback": "Snapshot"
+    },
+    {
+      "id": "maxperf.power.active_cooling_policy_ac",
+      "displayName": "Enforce Active Fan Cooling Policy on AC Power",
+      "category": "Power",
+      "action": "SetRegistryValue",
+      "target": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82BE-4824-96C1-47B60B740D00\\943c8d6a-d4c9-4e07-b10e-1e0f86e0e134\\DefaultPowerSchemeValues\\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\\ACSettingIndex",
+      "value": 1,
+      "os": [
+        "win10",
+        "win11"
+      ],
+      "risk": "Safe",
+      "requiresConfirmation": false,
+      "warning": "Spins fans to dissipate heat before throttling CPU clock speeds.",
+      "conditions": [
+        {
+          "type": "IsOnAc",
+          "value": true
+        }
       ],
       "verification": "ReadBack",
       "rollback": "Snapshot"

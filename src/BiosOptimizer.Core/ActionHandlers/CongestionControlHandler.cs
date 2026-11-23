@@ -29,19 +29,37 @@ public class CongestionControlHandler : IActionHandler
             };
         }
 
+        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureNetworkTweak(
+            entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
+            $"Congestion Control Provider → {targetValue}",
+            "TCP Supplemental Template",
+            currentValue,
+            targetValue,
+            "SAFE"
+        );
+        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+        {
+            return new OptimizationResult
+            {
+                Status = ResultStatus.Failed,
+                ItemId = "CongestionControl",
+                DisplayName = entry.DisplayName,
+                Message = bkErr
+            };
+        }
+
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "netsh",
                 Arguments = $"int tcp set supplemental template=internet congestionprovider={targetValue}",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             });
-            p?.WaitForExit();
-            
-            if (p?.ExitCode == 0)
+            if (p != null && p.WaitForExit(5000) && p.ExitCode == 0)
             {
                 var newValue = GetCurrentValueDisplay(entry);
                 if (newValue.Equals(targetValue, StringComparison.OrdinalIgnoreCase))
@@ -51,7 +69,7 @@ public class CongestionControlHandler : IActionHandler
                         Status = ResultStatus.Success,
                         ItemId = "CongestionControl",
                         DisplayName = $"Set Congestion Provider to {targetValue}",
-                        
+                        Message = $"Verified TCP congestion provider = {newValue}"
                     };
                 }
             }
@@ -70,7 +88,7 @@ public class CongestionControlHandler : IActionHandler
     {
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "netsh",
                 Arguments = "int tcp show supplemental",
@@ -79,7 +97,7 @@ public class CongestionControlHandler : IActionHandler
                 RedirectStandardOutput = true
             });
             var output = p?.StandardOutput.ReadToEnd();
-            p?.WaitForExit();
+            p?.WaitForExit(4000);
 
             if (!string.IsNullOrEmpty(output))
             {

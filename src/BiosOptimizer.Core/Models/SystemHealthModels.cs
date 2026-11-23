@@ -53,6 +53,21 @@ namespace BiosOptimizer.Core.Models
         public bool RequiresReboot { get; set; }
     }
 
+    public class HealthCheckItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Status { get; set; } = "Healthy"; // Healthy | Warning | Critical | Unsupported | FailedToCollect | AccessDenied
+        public bool IsMeasured { get; set; } = true;
+        public string MeasuredValue { get; set; } = string.Empty;
+        public string ReferenceThreshold { get; set; } = string.Empty;
+        public RecommendationSeverity Severity { get; set; } = RecommendationSeverity.Info;
+        public string Explanation { get; set; } = string.Empty;
+        public string? ErrorDetail { get; set; }
+        public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    }
+
     public class HealthCategoryScore
     {
         public SystemHealthCategoryType Category { get; set; }
@@ -61,8 +76,13 @@ namespace BiosOptimizer.Core.Models
         public int Score { get; set; } = 100;
         public double Weight { get; set; } = 10.0;
         public HealthState State { get; set; } = HealthState.Excellent;
+        public string Status { get; set; } = "Healthy"; // Healthy | Warning | Critical | Unsupported | FailedToCollect | AccessDenied
+        public bool IsMeasured { get; set; } = true;
         public string HealthLabel { get; set; } = "OPTIMAL";
         public string Evidence { get; set; } = string.Empty;
+        public string MeasuredValue { get; set; } = string.Empty;
+        public string ReferenceThreshold { get; set; } = string.Empty;
+        public string? ErrorDetail { get; set; }
         public double Confidence { get; set; } = 1.0;
         public List<HealthRecommendation> Recommendations { get; set; } = new();
         public DateTime LastChecked { get; set; } = DateTime.Now;
@@ -73,10 +93,13 @@ namespace BiosOptimizer.Core.Models
     public class SystemHealthSnapshot
     {
         public int OverallScore { get; set; } = 100;
+        public double Coverage { get; set; } = 1.0;
         public HealthState OverallHealthState { get; set; } = HealthState.Excellent;
         public string OverallHealthText { get; set; } = "SYSTEM HEALTHY";
         public string? CriticalCapApplied { get; set; }
         public List<HealthCategoryScore> Categories { get; set; } = new();
+        public List<HealthCheckItem> Checks { get; set; } = new();
+        public List<string> UnmeasuredCategories { get; set; } = new();
         public List<HealthRecommendation> ActiveRecommendations { get; set; } = new();
         public DateTime Timestamp { get; set; } = DateTime.Now;
         public TimeSpan ScanDuration { get; set; } = TimeSpan.Zero;

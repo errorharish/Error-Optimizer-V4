@@ -431,27 +431,27 @@ namespace BiosOptimizer.GUI.ViewModels
 
             OpenDiscordCommand = new RelayCommand(_ =>
             {
-                try { Process.Start(new ProcessStartInfo("https://discord.gg/7r4myvQ8dp") { UseShellExecute = true }); } catch { }
+                SystemPowerOperations.OpenApprovedChannelUrl("discord");
             });
 
             OpenDiscordCommunityCommand = new RelayCommand(_ =>
             {
-                try { Process.Start(new ProcessStartInfo("https://discord.gg/7r4myvQ8dp") { UseShellExecute = true }); } catch { }
+                SystemPowerOperations.OpenApprovedChannelUrl("discord");
             });
 
             OpenYouTubeCommand = new RelayCommand(_ =>
             {
-                try { Process.Start(new ProcessStartInfo("https://www.youtube.com/@Errorfftamil") { UseShellExecute = true }); } catch { }
+                SystemPowerOperations.OpenApprovedChannelUrl("youtube");
             });
 
             OpenInstagramCommand = new RelayCommand(_ =>
             {
-                try { Process.Start(new ProcessStartInfo("https://www.instagram.com/errorexeff/?utm_source=ig_web_button_share_sheet") { UseShellExecute = true }); } catch { }
+                SystemPowerOperations.OpenApprovedChannelUrl("instagram");
             });
 
             OpenKickCommand = new RelayCommand(_ =>
             {
-                try { Process.Start(new ProcessStartInfo("https://kick.com/errorexeff") { UseShellExecute = true }); } catch { }
+                SystemPowerOperations.OpenApprovedChannelUrl("kick");
             });
 
             OpenWebsiteCommand = new RelayCommand(_ =>
@@ -1028,7 +1028,7 @@ namespace BiosOptimizer.GUI.ViewModels
                 "GPU.UNIVERSAL_HAGS" => "Enables HwSchMode = 2 in GraphicsDrivers registry, handing off GPU scheduling tasks to the GPU hardware scheduler on WDDM 2.7+ drivers to minimize render queue submission latency.",
                 "GPU.NVIDIA_POWERMIZER_MAX_PERF" => "Configures PowerMizerLevel = 1 in NVIDIA display adapter class keys, preventing the GPU core from downclocking to low-power P-states during light frame transitions.",
                 "GPU.AMD_DISABLE_ULPS" => "Sets EnableUlps = 0 across AMD display adapter registry instances, disabling Ultra Low Power State to eliminate sleep/wake transition stutter.",
-                "NETWORK.DISABLE_THROTTLING_INDEX" => "Sets NetworkThrottlingIndex = 0xFFFFFFFF and SystemResponsiveness = 0 in Multimedia\\SystemProfile to disable packet rate limiting during audio/video playback.",
+                "NETWORK.DISABLE_THROTTLING_INDEX" => "Sets NetworkThrottlingIndex = 0xFFFFFFFF in Multimedia\\SystemProfile to disable packet rate limiting during audio/video playback.",
                 "NETWORK.TCP_AUTOTUNING_NORMAL" => "Calibrates the TCP receive window auto-tuning level to 'normal' via netsh interface tcp set global autotuninglevel=normal for maximum network throughput.",
                 "STORAGE.DISABLE_8DOT3_NAMES" => "Sets NtfsDisable8dot3NameCreation = 1 in FileSystem registry, eliminating legacy MS-DOS 8.3 filename directory indexing overhead on modern SSDs.",
                 "STORAGE.DISABLE_LAST_ACCESS_TIME" => "Sets NtfsDisableLastAccessUpdate = 1 in FileSystem registry, preventing NTFS from performing disk write I/O to update access timestamps on read operations.",
@@ -1096,7 +1096,7 @@ namespace BiosOptimizer.GUI.ViewModels
                 "GPU.UNIVERSAL_HAGS" => @"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers -> HwSchMode (DWORD = 2)",
                 "GPU.NVIDIA_POWERMIZER_MAX_PERF" => @"HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000 -> PowerMizerLevel (DWORD = 1)",
                 "GPU.AMD_DISABLE_ULPS" => @"HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000 -> EnableUlps (DWORD = 0)",
-                "NETWORK.DISABLE_THROTTLING_INDEX" => @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile -> NetworkThrottlingIndex = 0xFFFFFFFF, SystemResponsiveness = 0",
+                "NETWORK.DISABLE_THROTTLING_INDEX" => @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile -> NetworkThrottlingIndex = 0xFFFFFFFF",
                 "NETWORK.TCP_AUTOTUNING_NORMAL" => "Windows TCP/IP Stack Global Configuration -> netsh int tcp set global autotuninglevel=normal",
                 "STORAGE.DISABLE_8DOT3_NAMES" => @"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem -> NtfsDisable8dot3NameCreation (DWORD = 1)",
                 "STORAGE.DISABLE_LAST_ACCESS_TIME" => @"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem -> NtfsDisableLastAccessUpdate (DWORD = 1)",

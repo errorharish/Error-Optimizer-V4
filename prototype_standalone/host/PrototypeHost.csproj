@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ERROR OPTIMIZER PROTOTYPE</AssemblyName>
+    <RootNamespace>ErrorOptimizerPrototypeHost</RootNamespace>
+    <AssemblyTitle>ERROR OPTIMIZER V4</AssemblyTitle>
+    <Product>ERROR OPTIMIZER V4</Product>
+    <Company>Error Optimizer Team</Company>
+    <Description>ERROR OPTIMIZER V4</Description>
+    <Copyright>Copyright © 2026 Error Optimizer Team</Copyright>
+    <ApplicationIcon>assets\app_logo.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <Version>4.2.0</Version>
+    <AssemblyVersion>4.2.0.0</AssemblyVersion>
+    <FileVersion>4.2.0.0</FileVersion>
+    <InformationalVersion>4.2.0-standalone-20261123.1850</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BiosOptimizer.IPC\BiosOptimizer.IPC.csproj" />
+    <ProjectReference Include="..\..\src\BiosOptimizer.Core\BiosOptimizer.Core.csproj" />
+    <ProjectReference Include="..\..\src\BiosOptimizer.Detection\BiosOptimizer.Detection.csproj" />
+    <ProjectReference Include="..\..\src\BiosOptimizer.Safety\BiosOptimizer.Safety.csproj" />
+    <ProjectReference Include="..\..\src\BiosOptimizer.CLI\BiosOptimizer.CLI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="assets\app_logo.ico" />
+    <EmbeddedResource Include="..\frontend-bundle.zip" LogicalName="ERROR_OPTIMIZER_PROTOTYPE.frontend.zip" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\frontend\dist\**\*">
+      <Link>frontend\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
+    <None Include="..\..\profiles\**\*">
+      <Link>profiles\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CleanIntermediateExes" AfterTargets="Publish">
+    <ItemGroup>
+      <_IntermediateExes Include="$(MSBuildProjectDirectory)\bin\**\*.exe" />
+      <_IntermediateExes Include="$(MSBuildProjectDirectory)\obj\**\*.exe" />
+    </ItemGroup>
+    <Delete Files="@(_IntermediateExes)" />
+    <Delete Files="$(PublishDir)BiosOptimizer.CLI.exe;$(PublishDir)BiosOptimizer.CLI.pdb;$(PublishDir)BiosOptimizer.CLI.deps.json;$(PublishDir)BiosOptimizer.CLI.runtimeconfig.json" />
+  </Target>
+
+  <Target Name="PublishCompanionService" AfterTargets="CleanIntermediateExes" Condition="'$(SkipCompanionServicePublish)' != 'true'">
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\..\src\BiosOptimizer.Service\BiosOptimizer.Service.csproj&quot; -c $(Configuration) -r win-x64 --no-restore -o &quot;$(PublishDir)core&quot;" />
+  </Target>
+
+</Project>

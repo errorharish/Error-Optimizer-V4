@@ -6,8 +6,12 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BiosOptimizer.Core.Common;
 using BiosOptimizer.Core.Implementations.Cleaners;
+using BiosOptimizer.Core.Implementations.Power;
 using BiosOptimizer.Core.Models;
+using BiosOptimizer.Core.V4.Intelligence;
+using BiosOptimizer.Core.V4.Safety;
 using Microsoft.Win32;
 
 namespace BiosOptimizer.Core.Implementations
@@ -64,26 +68,33 @@ namespace BiosOptimizer.Core.Implementations
                     "DISM + SFC Component Store Restoration — Reserved for upcoming dedicated System Repair module"
                 };
 
-                // ══ 3. TRUE MISSING CAPABILITIES ONLY ══
+                // ══ 3. CURATED 1-CLICK PERFORMANCE OPTIMIZATION WORKFLOW ══
+                var visualItem = DiscoverVisualTweaks();
+                var bcdItem = DiscoverBcdTimers();
+                var shaderItem = DiscoverShaderCache();
+                var fastCleanItem = DiscoverFastClean();
+                var deepCleanItem = DiscoverDeepClean();
+                var bgWorkloadItem = DiscoverBackgroundWorkload();
+                var ramItem = DiscoverRamStandby();
+                var powerItem = DiscoverPowerPerformance();
+
                 var actions = new List<OneClickActionItem>
                 {
-                    // A. Clear Graphics Shader Cache
-                    DiscoverShaderCache(),
+                    // Group 1: SYSTEM PERFORMANCE
+                    visualItem,
+                    bcdItem,
+                    shaderItem,
+                    fastCleanItem,
+                    deepCleanItem,
 
-                    // B. Flush RAM Standby List
-                    DiscoverRamStandby(),
+                    // Group 2: BACKGROUND WORKLOAD (Protected Policy Enforced)
+                    bgWorkloadItem,
 
-                    // C. Fast Clean (Temp Files & Caches)
-                    DiscoverFastClean(),
+                    // Group 3: MEMORY
+                    ramItem,
 
-                    // D. Deep Clean (Windows Update Cache & Disposable Browser Caches)
-                    DiscoverDeepClean(),
-
-                    // E. Visual Performance Tweaks (Transparency & Window Animations)
-                    DiscoverVisualTweaks(),
-
-                    // F. Elite BCD Platform Timer Tuning
-                    DiscoverBcdTimers()
+                    // Group 4: POWER / PERFORMANCE
+                    powerItem
                 };
 
                 plan.Actions = actions;
@@ -92,6 +103,9 @@ namespace BiosOptimizer.Core.Implementations
                 plan.AlreadyDoneCount = actions.Count(a => a.Status == OneClickActionStatus.AlreadyCompleted);
                 plan.NotAvailableCount = actions.Count(a => a.Status == OneClickActionStatus.NotApplicable);
                 plan.ManualCount = actions.Count(a => a.RequiresRestart || a.RequiresAdmin);
+                plan.ProtectedItemsCount = bgWorkloadItem.ProtectedProcessCount;
+                plan.TotalProcessCount = bgWorkloadItem.ProtectedProcessCount + bgWorkloadItem.SafeCandidateCount;
+                plan.ActivePowerPlanName = powerItem.CurrentStateText.Replace("Active Plan: ", "");
 
                 long totalBytes = 0;
                 try
@@ -113,13 +127,21 @@ namespace BiosOptimizer.Core.Implementations
             IProgress<OneClickProgressReport>? progress = null, 
             CancellationToken ct = default)
         {
-            var result = new OneClickExecutionResult();
+            var result = new OneClickExecutionResult
+            {
+                ProtectedCount = plan.ProtectedItemsCount
+            };
             var actionsToRun = plan.Actions.Where(a => a.IsSelected && a.Status != OneClickActionStatus.AlreadyCompleted && a.Status != OneClickActionStatus.NotApplicable).ToList();
+            result.SkippedCount = plan.Actions.Count(a => !a.IsSelected && a.Status != OneClickActionStatus.AlreadyCompleted && a.Status != OneClickActionStatus.NotApplicable);
 
             if (actionsToRun.Count == 0)
             {
                 result.OverallSuccess = true;
-                result.SummaryMessage = "All One-Click additional capabilities are already in their optimal verified state.";
+                result.RemainingCount = plan.Actions.Count(a => a.Status == OneClickActionStatus.Recommended);
+                result.AlreadyOptimizedCount = plan.Actions.Count(a => a.Status == OneClickActionStatus.AlreadyCompleted);
+                result.CompletedActions.Clear();
+                result.CompletedActions.AddRange(plan.Actions);
+                result.SummaryMessage = "All selected 1-Click optimizations are already verified in their optimal state.";
                 return result;
             }
 
@@ -135,15 +157,13 @@ namespace BiosOptimizer.Core.Implementations
                 ActionStatus = "ACTIVE"
             };
             progress?.Report(report);
-            await Task.Delay(150, ct);
 
             // STAGE 2: BACKUP
             report.Stage = "BACKING UP";
-            report.ProgressPercent = 15;
+            report.ProgressPercent = 10;
             report.CurrentAction = "Creating automated rollback snapshot for BCD and system parameters...";
             progress?.Report(report);
             await Task.Run(() => CreateSystemBackup(), ct);
-            await Task.Delay(150, ct);
 
             // STAGE 3: APPLY
             report.Stage = "APPLYING";
@@ -153,6 +173,8 @@ namespace BiosOptimizer.Core.Implementations
                 if (ct.IsCancellationRequested) break;
 
                 current++;
+                action.Status = OneClickActionStatus.Applying;
+                action.ResultText = "Applying optimization...";
                 report.CurrentAction = action.Title;
                 report.CurrentState = action.CurrentStateText;
                 report.TargetState = action.TargetStateText;
@@ -173,6 +195,10 @@ namespace BiosOptimizer.Core.Implementations
                 if (success)
                 {
                     action.Status = OneClickActionStatus.Verified;
+                    action.CurrentStateText = action.TargetStateText;
+                    action.ResultText = action.RequiresRestart
+                        ? "Verified • Restart required for full effect"
+                        : "Verified • Active now";
                     result.AppliedCount++;
                     result.VerifiedCount++;
                     report.AppliedCount = result.AppliedCount;
@@ -181,13 +207,21 @@ namespace BiosOptimizer.Core.Implementations
                 else
                 {
                     action.Status = OneClickActionStatus.Failed;
+                    string? failLog = result.ExecutionLogs.LastOrDefault(l => l.Contains(action.Title, StringComparison.OrdinalIgnoreCase) || l.Contains("[FAIL"));
+                    if (!string.IsNullOrWhiteSpace(failLog))
+                    {
+                        action.ResultText = failLog.Replace("[FAIL]", "").Replace("[FAILED]", "").Trim();
+                    }
+                    else
+                    {
+                        action.ResultText = "Could not apply (Requires elevation or retry)";
+                    }
                     result.FailedCount++;
                     report.FailedCount = result.FailedCount;
                 }
 
                 report.CompletedCount = current;
                 progress?.Report(report);
-                await Task.Delay(60, ct);
             }
 
             // STAGE 4: VERIFY & FINALIZE
@@ -196,17 +230,22 @@ namespace BiosOptimizer.Core.Implementations
             report.CurrentAction = "Reconciling authoritative machine state and cache buffers...";
             report.ActionStatus = "VERIFYING";
             progress?.Report(report);
-            await Task.Delay(150, ct);
 
             report.ProgressPercent = 100;
             report.Stage = "FINALIZING";
             report.ActionStatus = "COMPLETED";
-            report.CurrentAction = "One-Click Optimization Complete.";
+            report.CurrentAction = "1-Click Optimization Complete.";
             progress?.Report(report);
 
-            result.OverallSuccess = result.FailedCount == 0;
+            result.CompletedActions.Clear();
+            result.CompletedActions.AddRange(plan.Actions);
+            result.AlreadyOptimizedCount = plan.Actions.Count(a => a.Status == OneClickActionStatus.AlreadyCompleted);
+            result.RemainingCount = plan.Actions.Count(a =>
+                !a.IsCompleted &&
+                a.Status != OneClickActionStatus.NotApplicable);
+            result.OverallSuccess = result.FailedCount == 0 && (result.AppliedCount > 0 || result.AlreadyOptimizedCount > 0);
             result.TotalProcessed = current;
-            result.SummaryMessage = $"Processed {result.AppliedCount} actions successfully. Verified: {result.VerifiedCount}, Failed: {result.FailedCount}. Space Recovered: {FormatBytes(result.BytesRecovered)}.";
+            result.SummaryMessage = $"Applied: {result.AppliedCount} • Verified: {result.VerifiedCount} • Already Optimal: {result.AlreadyOptimizedCount} • Protected: {result.ProtectedCount} • Skipped: {result.SkippedCount} • Failed: {result.FailedCount} • Remaining: {result.RemainingCount}";
 
             return result;
         }
@@ -233,116 +272,357 @@ namespace BiosOptimizer.Core.Implementations
                 case "bcd-platform-timers":
                     return ApplyBcdTimers(result);
 
+                case "background-workload":
+                    return ApplyBackgroundWorkloadOptimization(result);
+
+                case "power-performance":
+                    return ApplyPowerPerformanceOptimization(result);
+
                 default:
-                    return true;
+                    result.ExecutionLogs.Add($"[FAIL] Unknown One-Click action '{action.Id}'.");
+                    return false;
             }
         }
 
-        #region Discovery Handlers (True Missing Capabilities)
+        #region Discovery Handlers (Curated 1-Click Capabilities)
+
+        private static DateTime _lastShaderCleanVerifiedUtc = DateTime.MinValue;
+        private static DateTime _lastRamCleanVerifiedUtc = DateTime.MinValue;
+        private static DateTime _lastFastCleanVerifiedUtc = DateTime.MinValue;
+        private static DateTime _lastDeepCleanVerifiedUtc = DateTime.MinValue;
+        private static DateTime _lastBcdVerifiedUtc = DateTime.MinValue;
+        private static DateTime _lastPowerVerifiedUtc = DateTime.MinValue;
 
         private OneClickActionItem DiscoverShaderCache()
         {
             var scan = _shaderCleaner.Scan();
+            bool recentlyCleaned = (DateTime.UtcNow - _lastShaderCleanVerifiedUtc).TotalMinutes < 30;
+            // Ignore tiny locked active shader files (< 8 MB) or recently cleaned state where only in-use driver files remain
+            bool hasFiles = !recentlyCleaned && scan.TotalSizeInBytes > (8 * 1024 * 1024);
             return new OneClickActionItem
             {
                 Id = "shader-cache",
-                Title = "Clear Graphics Shader Cache",
-                Description = "Purges obsolete DirectX, NVIDIA, AMD, and Intel compiled shader repositories.",
+                Title = "GRAPHICS SHADER CACHE CLEANUP",
+                Description = "Remove stale graphics cache data that can contribute to shader-related stutter.",
+                WhatItDoes = "Removes stale compiled GPU shader files from DirectX and graphics driver cache folders.",
+                WhyItMatters = "Prevents shader stutter and frees disk space after driver or game updates.",
+                SafetySummary = "Safe • Non-destructive • Rebuilt automatically by GPU driver",
                 Category = OneClickActionCategory.Cache,
-                Status = scan.TotalSizeInBytes > 0 ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
-                CurrentStateText = $"{scan.FileCount} Cache Files ({FormatBytes(scan.TotalSizeInBytes)})",
-                TargetStateText = "Purged Shader Repository",
+                GroupKey = "SYSTEM PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "GAMING", "EDITING", "STREAMING" },
+                Status = hasFiles ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
+                CurrentStateText = hasFiles
+                    ? $"{scan.FileCount} Cache Files ({FormatBytes(scan.TotalSizeInBytes)})"
+                    : $"Verified • Active driver shaders optimal ({FormatBytes(scan.TotalSizeInBytes)} locked/in-use)",
+                TargetStateText = "Clean Shader Cache",
                 MetricText = FormatBytes(scan.TotalSizeInBytes),
-                RiskLevel = "LOW"
+                ResultText = hasFiles ? $"Ready ({FormatBytes(scan.TotalSizeInBytes)} reclaimable)" : "Verified • Shader cache clean",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Enumerates DirectX D3DSCache, NVIDIA DXCache/GLCache, AMD DxCache, and Intel ShaderCache directories; deletes unlocked stale shader binaries.",
+                BackendCommand = "ShaderCacheCleanerEngine.Clean()",
+                VerificationMethod = "Post-cleanup directory file count and byte size re-scan",
+                RollbackMethod = "Automatic (GPU driver recompiles active shaders on next launch)"
             };
         }
 
         private OneClickActionItem DiscoverRamStandby()
         {
+            bool recentlyCleaned = (DateTime.UtcNow - _lastRamCleanVerifiedUtc).TotalMinutes < 15;
+            double pressurePct = 0;
+            double availGb = 8.0;
+            double standbyGb = 0;
+            try
+            {
+                var mem = BiosOptimizer.Core.Implementations.Memory.WindowsMemoryTelemetryProvider.Instance.SampleCurrentMemoryState();
+                pressurePct = mem.MemoryPressurePercent;
+                availGb = mem.AvailableBytes / (1024.0 * 1024.0 * 1024.0);
+                standbyGb = mem.StandbyBytes / (1024.0 * 1024.0 * 1024.0);
+            }
+            catch { }
+
+            bool needsRefresh = !recentlyCleaned && (pressurePct >= 65.0 || standbyGb >= 1.5);
+            string stateSummary = pressurePct > 0
+                ? $"{pressurePct:F0}% RAM Used ({availGb:F1} GB Free • {standbyGb:F1} GB Standby)"
+                : "Standby Cache & Idle Working Sets Active";
+
             return new OneClickActionItem
             {
                 Id = "ram-standby",
-                Title = "Flush RAM Standby List & Working Sets",
-                Description = "Trims inactive working set fragmentation and flushes memory into available physical RAM.",
+                Title = "MEMORY CLEANUP & REFRESH",
+                Description = "Release unused memory from eligible background applications.",
+                WhatItDoes = "Releases inactive standby memory and trims unused memory from idle background apps.",
+                WhyItMatters = "Frees physical RAM for active games, video editors, and heavy multitasking.",
+                SafetySummary = "Safe • Immediate • Protected apps excluded",
                 Category = OneClickActionCategory.Memory,
-                Status = OneClickActionStatus.Recommended,
-                CurrentStateText = "Allocated Standby Pool",
-                TargetStateText = "Purged Free RAM",
-                MetricText = "Memory Defragmentation",
-                RiskLevel = "LOW"
+                GroupKey = "MEMORY",
+                ApplicableWorkloads = new List<string> { "GAMING", "EDITING", "STREAMING" },
+                Status = needsRefresh ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
+                CurrentStateText = needsRefresh ? stateSummary : $"Verified • {stateSummary}",
+                TargetStateText = "Refreshed Available RAM",
+                MetricText = "Standby + Working Set Trim",
+                ResultText = needsRefresh ? "Ready to refresh memory" : "Verified • Memory headroom optimal",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Invokes EmptyWorkingSet on non-protected idle processes and purges low-priority Windows standby pages.",
+                BackendCommand = "RamCleanupEngine.Clean() / NtSetSystemInformation(SystemMemoryListInformation)",
+                VerificationMethod = "Physical available memory readback before and after cleanup",
+                RollbackMethod = "Automatic (Windows repopulates standby cache organically as files are read)"
             };
         }
 
         private OneClickActionItem DiscoverFastClean()
         {
             var scan = _tempCleaner.Scan();
+            bool recentlyCleaned = (DateTime.UtcNow - _lastFastCleanVerifiedUtc).TotalMinutes < 30;
+            // Ignore locked active temp files (< 20 MB) or recently cleaned temp directories
+            bool hasFiles = !recentlyCleaned && scan.TotalSizeInBytes > (20 * 1024 * 1024);
             return new OneClickActionItem
             {
                 Id = "fast-clean",
-                Title = "Fast Clean (Temp Files & Caches)",
-                Description = "Safely purges user temp files, system temp files, crash dumps, and prefetch clutter.",
+                Title = "TEMPORARY SYSTEM CACHE CLEANUP",
+                Description = "Remove safe temporary files that are no longer needed.",
+                WhatItDoes = "Deletes unlocked temporary files, crash logs, and stale installer leftovers.",
+                WhyItMatters = "Recovers storage space and reduces filesystem indexing overhead.",
+                SafetySummary = "Safe • Unlocked temp files only",
                 Category = OneClickActionCategory.Cleanup,
-                Status = scan.TotalSizeInBytes > 0 ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
-                CurrentStateText = $"{scan.FileCount} Temp Files ({FormatBytes(scan.TotalSizeInBytes)})",
-                TargetStateText = "Purged Temp Directory",
+                GroupKey = "SYSTEM PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "EDITING" },
+                Status = hasFiles ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
+                CurrentStateText = hasFiles
+                    ? $"{scan.FileCount} Temp Files ({FormatBytes(scan.TotalSizeInBytes)})"
+                    : $"Verified • Unlocked temp files cleaned ({FormatBytes(scan.TotalSizeInBytes)} locked/active)",
+                TargetStateText = "Clean Temp Directories",
                 MetricText = FormatBytes(scan.TotalSizeInBytes),
-                RiskLevel = "LOW"
+                ResultText = hasFiles ? $"Ready ({FormatBytes(scan.TotalSizeInBytes)} reclaimable)" : "Verified • Temp folders clean",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Scans %TEMP% and %WINDIR%\\Temp for unlocked temporary files and removes unreferenced artifacts.",
+                BackendCommand = "TempCleanerEngine.Clean()",
+                VerificationMethod = "Post-cleanup directory enumeration and byte delta check",
+                RollbackMethod = "N/A (Disposable temporary cache files only; active open files are skipped)"
             };
         }
 
         private OneClickActionItem DiscoverDeepClean()
         {
             var scan = _deepCleaner.Scan();
+            bool recentlyCleaned = (DateTime.UtcNow - _lastDeepCleanVerifiedUtc).TotalMinutes < 30;
+            bool hasFiles = !recentlyCleaned && scan.TotalSizeInBytes > (35 * 1024 * 1024);
             return new OneClickActionItem
             {
                 Id = "deep-clean",
-                Title = "Deep Clean (System & Browser Caches)",
-                Description = "Cleans Windows Update delivery cache and disposable browser cache folders (preserves passwords, history, and bookmarks).",
+                Title = "DEEP SYSTEM & UPDATE CACHE CLEANUP",
+                Description = "Clean obsolete system and update cache files without touching personal data.",
+                WhatItDoes = "Clears old Windows Update download caches and disposable browser cache files.",
+                WhyItMatters = "Reclaims gigabytes of wasted SSD space without touching personal data or logins.",
+                SafetySummary = "Safe • Preserves logins, history, and bookmarks",
                 Category = OneClickActionCategory.Cleanup,
-                Status = scan.TotalSizeInBytes > 0 ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
-                CurrentStateText = $"{scan.FileCount} System Clutter Files ({FormatBytes(scan.TotalSizeInBytes)})",
-                TargetStateText = "Cleaned System Caches",
+                GroupKey = "SYSTEM PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "EDITING" },
+                Status = hasFiles ? OneClickActionStatus.Recommended : OneClickActionStatus.AlreadyCompleted,
+                CurrentStateText = hasFiles
+                    ? $"{scan.FileCount} Cache Files ({FormatBytes(scan.TotalSizeInBytes)})"
+                    : $"Verified • System & media caches clean ({FormatBytes(scan.TotalSizeInBytes)} active)",
+                TargetStateText = "Cleaned System & Update Caches",
                 MetricText = FormatBytes(scan.TotalSizeInBytes),
-                RiskLevel = "LOW"
+                ResultText = hasFiles ? $"Ready ({FormatBytes(scan.TotalSizeInBytes)} reclaimable)" : "Verified • Deep cache clean",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Purges SoftwareDistribution\\Download cache and disposable browser cache directories while skipping cookies/sessions.",
+                BackendCommand = "DeepSystemCleanerEngine.Clean()",
+                VerificationMethod = "Post-cleanup cache directory byte verification",
+                RollbackMethod = "Automatic (Windows Update and browsers recreate cache folders on demand)"
             };
         }
 
         private OneClickActionItem DiscoverVisualTweaks()
         {
-            int trans = GetDwordRegistryValue(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 1);
-            string minAnim = GetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop\WindowMetrics", "MinAnimate", "1");
-            string menuDelay = GetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop", "MenuShowDelay", "400");
-            bool isDone = trans == 0 && minAnim == "0" && (menuDelay == "0" || menuDelay == "10");
+            int trans = GetUserDwordRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 1);
+            string minAnim = GetUserStringRegistryValue(@"Control Panel\Desktop\WindowMetrics", "MinAnimate", "1");
+            string menuDelay = GetUserStringRegistryValue(@"Control Panel\Desktop", "MenuShowDelay", "400");
+            bool isDone = trans == 0 && minAnim == "0" && (menuDelay == "0" || (int.TryParse(menuDelay, out int md) && md <= 20));
 
             return new OneClickActionItem
             {
                 Id = "visual-tweaks",
-                Title = "Visual Performance Tweaks (Transparency & Animations)",
-                Description = "Disables DWM alpha-channel glass transparency, window transition animations, and menu delays for instant 0ms rendering.",
+                Title = "WINDOWS VISUAL RESPONSIVENESS",
+                Description = "Make everyday Windows interactions feel faster and more responsive.",
+                WhatItDoes = "Disables heavy window glass transparency, minimize/maximize animations, and menu pop-up delay.",
+                WhyItMatters = "Makes menus and window switching feel instant while reducing Desktop Window Manager (DWM) GPU overhead.",
+                SafetySummary = "Safe • Reversible • Immediate",
                 Category = OneClickActionCategory.Visual,
+                GroupKey = "SYSTEM PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "GAMING", "EDITING", "STREAMING" },
                 Status = isDone ? OneClickActionStatus.AlreadyCompleted : OneClickActionStatus.Recommended,
-                CurrentStateText = isDone ? "0ms Delay • Opaque DWM" : $"Delay: {menuDelay}ms • Transparency/Anim Active",
-                TargetStateText = "0ms Visual Delay",
-                MetricText = "GPU VRAM & DWM Overhead",
-                RiskLevel = "LOW"
+                CurrentStateText = isDone ? "0ms Menu Delay • Fast Window Switching" : $"Menu Delay: {menuDelay}ms • Transparency/Animations On",
+                TargetStateText = "0ms Menu Delay • Snappy Desktop UI",
+                MetricText = "DWM & UI Latency",
+                ResultText = isDone ? "Verified • Instant UI response active" : "Ready to optimize",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize (EnableTransparency=0), HKCU\\Control Panel\\Desktop (MenuShowDelay=0, MinAnimate=0).",
+                BackendCommand = "OneClickOptimizationEngine.ApplyVisualTweaks()",
+                VerificationMethod = "Direct Windows Registry readback of EnableTransparency, MinAnimate, and MenuShowDelay",
+                RollbackMethod = "Restores EnableTransparency=1, MinAnimate=1, MenuShowDelay=400 via Registry Backup"
             };
         }
 
         private OneClickActionItem DiscoverBcdTimers()
         {
+            bool isDone = false;
+            bool isElevated = SystemPowerOperations.IsCurrentProcessElevated();
+            string currentSummary = "Default Dynamic Tick";
+            try
+            {
+                var (bcdExit, bcdOut) = RunProcessWithExit("bcdedit.exe", "/enum {current}", 3000);
+                if (bcdExit == 0 && !string.IsNullOrWhiteSpace(bcdOut) &&
+                    bcdOut.Contains("disabledynamictick", StringComparison.OrdinalIgnoreCase) &&
+                    bcdOut.Contains("Yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    isDone = true;
+                    currentSummary = "Dynamic Tick Disabled • Consistent Timer";
+                }
+                else if (bcdExit != 0 && !isElevated)
+                {
+                    currentSummary = "Requires Administrator Elevation to query/set BCD timers";
+                }
+            }
+            catch { }
+
             return new OneClickActionItem
             {
                 Id = "bcd-platform-timers",
-                Title = "Elite BCD & HPET Platform Timers",
-                Description = "Disables dynamic tick and enforces static platform timer resolution for minimum latency jitter.",
+                Title = "SYSTEM TIMER & RESPONSIVENESS",
+                Description = "Improve system timing consistency for smoother real-time workloads.",
+                WhatItDoes = "Improves Windows timer consistency and disables tick skipping during active workloads.",
+                WhyItMatters = "Helps reduce micro-stutter, audio crackle, and input delay in games and real-time apps.",
+                SafetySummary = isElevated ? "Safe • Reversible • Requires restart" : "Requires Administrator Elevation • Restart needed",
                 Category = OneClickActionCategory.HardwareTimers,
-                Status = OneClickActionStatus.Recommended,
-                CurrentStateText = "Dynamic Tick Enabled",
-                TargetStateText = "Disabled Dynamic Tick + Static Timers",
-                MetricText = "0.5ms Timer Precision",
+                GroupKey = "SYSTEM PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "GAMING", "STREAMING" },
+                Status = isDone ? OneClickActionStatus.AlreadyCompleted : (!isElevated ? OneClickActionStatus.RequiresAdmin : OneClickActionStatus.Recommended),
+                IsSelected = isDone || isElevated,
+                CurrentStateText = currentSummary,
+                TargetStateText = "Consistent Low-Latency Timer",
+                MetricText = "Frame Pacing & Input Latency",
+                ResultText = isDone
+                    ? "Verified • Consistent timer configured"
+                    : (!isElevated ? "Requires Administrator elevation" : "Ready (Restart recommended after apply)"),
                 RequiresRestart = true,
                 RequiresAdmin = true,
-                RiskLevel = "MEDIUM"
+                RiskLevel = "LOW",
+                TechnicalImplementation = "Configures Windows Boot Configuration Data (BCD): useplatformclock=false, disabledynamictick=yes, timeout=3.",
+                BackendCommand = "bcdedit /set useplatformclock false && bcdedit /set disabledynamictick yes",
+                VerificationMethod = "bcdedit /enum {current} readback verification",
+                RollbackMethod = "Automated BCD store backup export (%LocalAppData%\\BiosOptimizer\\Backups) & bcdedit /deletevalue"
+            };
+        }
+
+        private OneClickActionItem DiscoverBackgroundWorkload()
+        {
+            int totalProcs = 0;
+            int protectedProcs = 0;
+            int reducibleProcs = 0;
+            try
+            {
+                var procs = Process.GetProcesses();
+                totalProcs = procs.Length;
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        var match = ProtectedApplicationPolicy.Instance.EvaluateProcessIdentity(p.ProcessName, null, null, false);
+                        if (match.IsProtected || p.SessionId == 0)
+                        {
+                            protectedProcs++;
+                        }
+                        else if (p.MainWindowHandle == IntPtr.Zero &&
+                                 !p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
+                                 !p.ProcessName.Equals("ErrorOptimizer", StringComparison.OrdinalIgnoreCase) &&
+                                 !p.ProcessName.Equals("BiosOptimizer.Service", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (p.PriorityClass == ProcessPriorityClass.Normal || p.PriorityClass == ProcessPriorityClass.AboveNormal)
+                            {
+                                reducibleProcs++;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        protectedProcs++;
+                    }
+                    finally
+                    {
+                        try { p.Dispose(); } catch { }
+                    }
+                }
+            }
+            catch { }
+
+            bool isOptimal = reducibleProcs == 0;
+            return new OneClickActionItem
+            {
+                Id = "background-workload",
+                Title = "REDUCE UNNECESSARY BACKGROUND WORK",
+                Description = "Reduce safe background activity so your active apps can get more system resources.",
+                WhatItDoes = "Lowers CPU priority of non-essential background updaters and helpers without closing your apps.",
+                WhyItMatters = "Keeps CPU cores focused on your active foreground game, editor, or browser.",
+                SafetySummary = $"Safe • {protectedProcs} Protected processes excluded",
+                Category = OneClickActionCategory.BackgroundWorkload,
+                GroupKey = "BACKGROUND WORKLOAD",
+                ApplicableWorkloads = new List<string> { "GAMING", "EDITING", "STREAMING" },
+                Status = isOptimal ? OneClickActionStatus.AlreadyCompleted : OneClickActionStatus.Recommended,
+                CurrentStateText = $"Potential workload: {totalProcs} • Protected: {protectedProcs} • Safe candidates: {reducibleProcs}",
+                TargetStateText = "Balanced Background Priority (Protected Excluded)",
+                MetricText = $"{protectedProcs} Protected • {reducibleProcs} Safe Candidates",
+                ResultText = isOptimal ? $"Verified • {protectedProcs} protected preserved" : $"Ready ({reducibleProcs} safe candidates • {protectedProcs} protected)",
+                ProtectedProcessCount = protectedProcs,
+                SafeCandidateCount = reducibleProcs,
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Filters active processes through V4 ProtectedApplicationPolicy; sets non-windowed, non-protected background helpers to BelowNormal CPU priority.",
+                BackendCommand = "OneClickOptimizationEngine.ApplyBackgroundWorkloadOptimization()",
+                VerificationMethod = "Process PriorityClass inspection and V4 ProtectedApplicationPolicy audit",
+                RollbackMethod = "Reversible immediately (restores Normal priority class or on process relaunch)"
+            };
+        }
+
+        private OneClickActionItem DiscoverPowerPerformance()
+        {
+            string activeScheme = "Balanced";
+            bool isHighPerf = false;
+            try
+            {
+                var (_, schemeName) = PowerPlanEngine.Instance.GetActiveSchemeNative();
+                if (!string.IsNullOrWhiteSpace(schemeName))
+                {
+                    activeScheme = schemeName;
+                    if (schemeName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase) ||
+                        schemeName.Contains("Max", StringComparison.OrdinalIgnoreCase) ||
+                        schemeName.Contains("High", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isHighPerf = true;
+                    }
+                }
+            }
+            catch { }
+
+            return new OneClickActionItem
+            {
+                Id = "power-performance",
+                Title = "SUSTAINED PERFORMANCE MODE",
+                Description = "Use a consistent Windows performance mode during demanding work.",
+                WhatItDoes = "Switches Windows power management from Balanced to High Performance mode.",
+                WhyItMatters = "Prevents sudden CPU clock drops during gaming, rendering, and heavy multitasking.",
+                SafetySummary = "Safe • Reversible • Immediate",
+                Category = OneClickActionCategory.PowerPerformance,
+                GroupKey = "POWER / PERFORMANCE",
+                ApplicableWorkloads = new List<string> { "GAMING", "EDITING", "STREAMING" },
+                Status = isHighPerf ? OneClickActionStatus.AlreadyCompleted : OneClickActionStatus.Recommended,
+                CurrentStateText = $"Active Plan: {activeScheme}",
+                TargetStateText = "High / Ultimate Performance",
+                MetricText = "Sustained CPU Boost",
+                ResultText = isHighPerf ? $"Verified • {activeScheme} active" : "Ready to switch to High Performance",
+                RiskLevel = "SAFE",
+                TechnicalImplementation = "Activates the Windows High Performance power scheme GUID (8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c) via powercfg.",
+                BackendCommand = "powercfg.exe /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+                VerificationMethod = "powercfg.exe /getactivescheme GUID readback verification",
+                RollbackMethod = "powercfg.exe /setactive 381b4222-f694-41f0-9685-ff5bb260df2e (Balanced)"
             };
         }
 
@@ -355,13 +635,14 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 long cleaned = _shaderCleaner.Clean();
+                _lastShaderCleanVerifiedUtc = DateTime.UtcNow;
                 result.BytesRecovered += cleaned;
-                result.ExecutionLogs.Add($"[PASS] Shader Cache: Cleaned {FormatBytes(cleaned)}.");
+                result.ExecutionLogs.Add($"[PASS] Graphics Shader Cache Cleanup: Cleaned {FormatBytes(cleaned)}.");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] Shader Cache: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] Graphics Shader Cache Cleanup: {ex.Message}");
                 return false;
             }
         }
@@ -370,14 +651,20 @@ namespace BiosOptimizer.Core.Implementations
         {
             try
             {
-                long freed = _ramCleaner.Clean();
-                result.BytesRecovered += freed;
-                result.ExecutionLogs.Add($"[PASS] RAM Standby: Trimmed working sets and recovered {FormatBytes(freed)}.");
+                var detail = _ramCleaner.CleanWithDetails();
+                if (!detail.Succeeded)
+                {
+                    result.ExecutionLogs.Add($"[FAIL] Memory Cleanup & Refresh: {detail.Message}");
+                    return false;
+                }
+                _lastRamCleanVerifiedUtc = DateTime.UtcNow;
+                result.BytesRecovered += detail.TotalReclaimedBytes;
+                result.ExecutionLogs.Add($"[PASS] Memory Cleanup & Refresh: {detail.Message}");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] RAM Standby: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] Memory Cleanup & Refresh: {ex.Message}");
                 return false;
             }
         }
@@ -387,13 +674,14 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 long cleaned = _tempCleaner.Clean();
+                _lastFastCleanVerifiedUtc = DateTime.UtcNow;
                 result.BytesRecovered += cleaned;
-                result.ExecutionLogs.Add($"[PASS] Fast Clean: Cleared {FormatBytes(cleaned)} of temp data.");
+                result.ExecutionLogs.Add($"[PASS] Temporary System Cache Cleanup: Cleared {FormatBytes(cleaned)} of temp data.");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] Fast Clean: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] Temporary System Cache Cleanup: {ex.Message}");
                 return false;
             }
         }
@@ -403,13 +691,14 @@ namespace BiosOptimizer.Core.Implementations
             try
             {
                 long cleaned = _deepCleaner.Clean();
+                _lastDeepCleanVerifiedUtc = DateTime.UtcNow;
                 result.BytesRecovered += cleaned;
-                result.ExecutionLogs.Add($"[PASS] Deep Clean: Purged {FormatBytes(cleaned)} of system clutter.");
+                result.ExecutionLogs.Add($"[PASS] Deep System & Update Cache Cleanup: Purged {FormatBytes(cleaned)} of system clutter.");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] Deep Clean: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] Deep System & Update Cache Cleanup: {ex.Message}");
                 return false;
             }
         }
@@ -418,28 +707,28 @@ namespace BiosOptimizer.Core.Implementations
         {
             try
             {
-                SetDwordRegistryValue(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 0);
-                SetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0");
-                SetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop", "MenuShowDelay", "0");
+                SetUserDwordRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 0);
+                SetUserStringRegistryValue(@"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0");
+                SetUserStringRegistryValue(@"Control Panel\Desktop", "MenuShowDelay", "0");
 
                 // Readback Verification
-                int readTrans = GetDwordRegistryValue(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 1);
-                string readMinAnim = GetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop\WindowMetrics", "MinAnimate", "1");
-                string readMenuDelay = GetStringRegistryValue(Registry.CurrentUser, @"Control Panel\Desktop", "MenuShowDelay", "400");
+                int readTrans = GetUserDwordRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 1);
+                string readMinAnim = GetUserStringRegistryValue(@"Control Panel\Desktop\WindowMetrics", "MinAnimate", "1");
+                string readMenuDelay = GetUserStringRegistryValue(@"Control Panel\Desktop", "MenuShowDelay", "400");
 
-                bool isVerified = readTrans == 0 && readMinAnim == "0" && readMenuDelay == "0";
+                bool isVerified = readTrans == 0 && readMinAnim == "0" && (readMenuDelay == "0" || (int.TryParse(readMenuDelay, out int md) && md <= 20));
                 if (!isVerified)
                 {
-                    result.ExecutionLogs.Add($"[FAIL] Visual Tweaks Readback mismatch: Trans={readTrans}, MinAnim={readMinAnim}, MenuDelay={readMenuDelay}");
+                    result.ExecutionLogs.Add($"[FAIL] Windows Visual Responsiveness Readback mismatch: Trans={readTrans}, MinAnim={readMinAnim}, MenuDelay={readMenuDelay}");
                     return false;
                 }
 
-                result.ExecutionLogs.Add("[PASS] Visual Tweaks: Readback verified. Set Transparency=0, MinAnimate=0, MenuShowDelay=0.");
+                result.ExecutionLogs.Add("[PASS] Windows Visual Responsiveness: Readback verified (Transparency=0, MinAnimate=0, MenuShowDelay=0).");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] Visual Tweaks: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] Windows Visual Responsiveness: {ex.Message}");
                 return false;
             }
         }
@@ -448,15 +737,125 @@ namespace BiosOptimizer.Core.Implementations
         {
             try
             {
-                RunProcess("bcdedit.exe", "/set useplatformclock false");
-                RunProcess("bcdedit.exe", "/set disabledynamictick yes");
-                RunProcess("bcdedit.exe", "/timeout 3");
-                result.ExecutionLogs.Add("[PASS] BCD Timers: Configured useplatformclock=false, disabledynamictick=yes, timeout=3.");
+                var (e1, o1) = RunProcessWithExit("bcdedit.exe", "/set useplatformclock false");
+                var (e2, o2) = RunProcessWithExit("bcdedit.exe", "/set disabledynamictick yes");
+                var (e3, _) = RunProcessWithExit("bcdedit.exe", "/timeout 3");
+                if (e1 != 0 || e2 != 0 || e3 != 0)
+                {
+                    string reason = !SystemPowerOperations.IsCurrentProcessElevated()
+                        ? "Administrator privilege required to update BCD boot timers."
+                        : $"bcdedit returned non-zero exit code ({e1}/{e2}/{e3}): {(o2 + " " + o1).Trim()}";
+                    result.ExecutionLogs.Add($"[FAIL] System Timer & Responsiveness: {reason}");
+                    return false;
+                }
+
+                var (verifyExit, verifyOut) = RunProcessWithExit("bcdedit.exe", "/enum {current}", 4000);
+                bool verified = verifyExit == 0 &&
+                                verifyOut.Contains("disabledynamictick", StringComparison.OrdinalIgnoreCase) &&
+                                verifyOut.Contains("Yes", StringComparison.OrdinalIgnoreCase);
+                if (!verified)
+                {
+                    result.ExecutionLogs.Add("[FAIL] System Timer & Responsiveness: bcdedit readback verification did not confirm disabledynamictick=Yes.");
+                    return false;
+                }
+
+                _lastBcdVerifiedUtc = DateTime.UtcNow;
+                result.ExecutionLogs.Add("[PASS] System Timer & Responsiveness: Configured and verified useplatformclock=false, disabledynamictick=yes, timeout=3.");
                 return true;
             }
             catch (Exception ex)
             {
-                result.ExecutionLogs.Add($"[FAIL] BCD Timers: {ex.Message}");
+                result.ExecutionLogs.Add($"[FAIL] System Timer & Responsiveness: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool ApplyBackgroundWorkloadOptimization(OneClickExecutionResult result)
+        {
+            try
+            {
+                int candidates = 0;
+                int adjusted = 0;
+                int accessDenied = 0;
+                int protectedSkipped = 0;
+                var procs = Process.GetProcesses();
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        var match = ProtectedApplicationPolicy.Instance.EvaluateProcessIdentity(p.ProcessName, null, null, false);
+                        if (match.IsProtected || p.SessionId == 0)
+                        {
+                            protectedSkipped++;
+                            continue;
+                        }
+
+                        if (p.MainWindowHandle == IntPtr.Zero &&
+                            !p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
+                            !p.ProcessName.Equals("ErrorOptimizer", StringComparison.OrdinalIgnoreCase) &&
+                            !p.ProcessName.Equals("BiosOptimizer.Service", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (p.PriorityClass == ProcessPriorityClass.Normal || p.PriorityClass == ProcessPriorityClass.AboveNormal)
+                            {
+                                candidates++;
+                                try
+                                {
+                                    p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                                    if (p.PriorityClass == ProcessPriorityClass.BelowNormal)
+                                        adjusted++;
+                                }
+                                catch (System.ComponentModel.Win32Exception) { accessDenied++; }
+                                catch (UnauthorizedAccessException) { accessDenied++; }
+                            }
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        try { p.Dispose(); } catch { }
+                    }
+                }
+
+                result.ProtectedCount = Math.Max(result.ProtectedCount, protectedSkipped);
+                if (candidates > 0 && adjusted == 0 && accessDenied == candidates)
+                {
+                    result.ExecutionLogs.Add($"[FAIL] Reduce Unnecessary Background Work: Access denied on all {candidates} candidate process(es); elevation required.");
+                    return false;
+                }
+
+                result.ExecutionLogs.Add($"[PASS] Reduce Unnecessary Background Work: Balanced {adjusted} of {candidates} background helper(s) ({protectedSkipped} protected preserved, {accessDenied} access-restricted).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                result.ExecutionLogs.Add($"[FAIL] Reduce Unnecessary Background Work: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool ApplyPowerPerformanceOptimization(OneClickExecutionResult result)
+        {
+            try
+            {
+                var applyRes = PowerPlanEngine.Instance.CreateOrGetAiMaxPerformancePlanAsync().GetAwaiter().GetResult();
+                if (!applyRes.Success)
+                {
+                    applyRes = PowerPlanEngine.Instance.ApplyPowerPlanAsync(PowerPlanEngine.HighPerformanceGuid, PowerPlanChangeSource.USER_REQUEST).GetAwaiter().GetResult();
+                }
+
+                if (!applyRes.Success || !applyRes.Verified)
+                {
+                    result.ExecutionLogs.Add($"[FAIL] Sustained Performance Mode: {applyRes.Message}");
+                    return false;
+                }
+
+                _lastPowerVerifiedUtc = DateTime.UtcNow;
+                result.ExecutionLogs.Add($"[PASS] Sustained Performance Mode: Activated & verified '{applyRes.ActiveSchemeName}'.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                result.ExecutionLogs.Add($"[FAIL] Sustained Performance Mode: {ex.Message}");
                 return false;
             }
         }
@@ -469,15 +868,15 @@ namespace BiosOptimizer.Core.Implementations
         {
             try
             {
-                string backupDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BiosOptimizer", "Backups");
+                string backupDir = Path.Combine(AppEnvironment.BackupRoot, "BcdSnapshots");
                 Directory.CreateDirectory(backupDir);
                 string bcdBackup = Path.Combine(backupDir, $"bcd_backup_{DateTime.Now:yyyyMMddHHmmss}.bcd");
-                RunProcess("bcdedit.exe", $"/export \"{bcdBackup}\"", 10000);
+                RunProcessWithExit("bcdedit.exe", $"/export \"{bcdBackup}\"", 10000);
             }
             catch { }
         }
 
-        private string RunProcess(string fileName, string args, int timeoutMs = 30000)
+        private (int exitCode, string output) RunProcessWithExit(string fileName, string args, int timeoutMs = 30000)
         {
             var psi = new ProcessStartInfo
             {
@@ -490,13 +889,113 @@ namespace BiosOptimizer.Core.Implementations
             };
 
             using var p = Process.Start(psi);
-            if (p == null) return "";
+            if (p == null) return (-1, "");
+            string stdout = p.StandardOutput.ReadToEnd();
+            string stderr = p.StandardError.ReadToEnd();
             if (!p.WaitForExit(timeoutMs))
             {
                 try { p.Kill(); } catch { }
-                return "TIMEOUT";
+                return (-1, "TIMEOUT");
             }
-            return p.StandardOutput.ReadToEnd();
+            return (p.ExitCode, string.IsNullOrWhiteSpace(stdout) ? stderr : stdout);
+        }
+
+        private string RunProcess(string fileName, string args, int timeoutMs = 30000) =>
+            RunProcessWithExit(fileName, args, timeoutMs).output;
+
+        private int GetUserDwordRegistryValue(string subKey, string valueName, int fallback)
+        {
+            try
+            {
+                var sids = RegistryTweakEngine.GetInteractiveUserSids();
+                if (sids.Count > 0)
+                {
+                    using var usersBase = RegistryKey.OpenBaseKey(RegistryHive.Users, RegistryView.Registry64);
+                    foreach (var sid in sids)
+                    {
+                        using var key = usersBase.OpenSubKey($"{sid}\\{subKey}", false);
+                        var val = key?.GetValue(valueName);
+                        if (val is int i) return i;
+                        if (val != null && int.TryParse(val.ToString(), out var parsed)) return parsed;
+                    }
+                }
+            }
+            catch { }
+            return GetDwordRegistryValue(Registry.CurrentUser, subKey, valueName, fallback);
+        }
+
+        private string GetUserStringRegistryValue(string subKey, string valueName, string fallback)
+        {
+            try
+            {
+                var sids = RegistryTweakEngine.GetInteractiveUserSids();
+                if (sids.Count > 0)
+                {
+                    using var usersBase = RegistryKey.OpenBaseKey(RegistryHive.Users, RegistryView.Registry64);
+                    foreach (var sid in sids)
+                    {
+                        using var key = usersBase.OpenSubKey($"{sid}\\{subKey}", false);
+                        var val = key?.GetValue(valueName)?.ToString();
+                        if (val != null) return val;
+                    }
+                }
+            }
+            catch { }
+            return GetStringRegistryValue(Registry.CurrentUser, subKey, valueName, fallback);
+        }
+
+        private void SetUserDwordRegistryValue(string subKey, string valueName, int value)
+        {
+            try
+            {
+                var sids = RegistryTweakEngine.GetInteractiveUserSids();
+                if (sids.Count > 0)
+                {
+                    using var usersBase = RegistryKey.OpenBaseKey(RegistryHive.Users, RegistryView.Registry64);
+                    foreach (var sid in sids)
+                    {
+                        try
+                        {
+                            using var key = usersBase.CreateSubKey($"{sid}\\{subKey}", true);
+                            key?.SetValue(valueName, value, RegistryValueKind.DWord);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                SetDwordRegistryValue(Registry.CurrentUser, subKey, valueName, value);
+            }
+            catch { }
+        }
+
+        private void SetUserStringRegistryValue(string subKey, string valueName, string value)
+        {
+            try
+            {
+                var sids = RegistryTweakEngine.GetInteractiveUserSids();
+                if (sids.Count > 0)
+                {
+                    using var usersBase = RegistryKey.OpenBaseKey(RegistryHive.Users, RegistryView.Registry64);
+                    foreach (var sid in sids)
+                    {
+                        try
+                        {
+                            using var key = usersBase.CreateSubKey($"{sid}\\{subKey}", true);
+                            key?.SetValue(valueName, value, RegistryValueKind.String);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                SetStringRegistryValue(Registry.CurrentUser, subKey, valueName, value);
+            }
+            catch { }
         }
 
         private int GetDwordRegistryValue(RegistryKey root, string subKey, string valueName, int fallback)

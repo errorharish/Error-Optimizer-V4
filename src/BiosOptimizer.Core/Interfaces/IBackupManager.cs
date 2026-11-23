@@ -25,6 +25,7 @@ namespace BiosOptimizer.Core.Interfaces
         public string TargetKey { get; set; } = "";
         public string ValueName { get; set; } = "";
         public string ValueType { get; set; } = "";
+        public string RegistryView { get; set; } = "Registry64";
         public bool PreviousExists { get; set; } = true;
         
         public string BackupLocation { get; set; } = "";
@@ -36,6 +37,8 @@ namespace BiosOptimizer.Core.Interfaces
         public string RollbackStatus { get; set; } = "AVAILABLE";
         public string ParentTransactionId { get; set; } = "";
         public string Notes { get; set; } = "";
+        public string IntegrityHash { get; set; } = "";
+        public string FileSha256 { get; set; } = "";
         public List<string> AffectedPaths { get; set; } = new();
 
         public string DisplayTimestamp => Timestamp.ToLocalTime().ToString("MMM dd, yyyy  hh:mm:ss tt");
@@ -121,23 +124,32 @@ namespace BiosOptimizer.Core.Interfaces
         BackupTransaction CaptureGenericTweak(string profileName, string optimizationId, string name, string category, string operationType, string beforeState, string afterState, string rollbackMethod, bool canRollback, string riskLevel = "SAFE", string? parentBatchId = null);
 
         // Rollback & Restore API
+        BackupTransaction CreateApplicationSnapshot(string name, string? notes = null);
+        (bool Valid, string Reason) ValidateTransactionIntegrity(string transactionId);
         Task<RestoreResult> RestoreSingleTransactionAsync(string transactionId, CancellationToken ct = default);
         Task<RestoreResult> RestoreProfileAsync(string profileName, CancellationToken ct = default);
         Task<RestoreResult> RestoreFullSystemSnapshotAsync(CancellationToken ct = default);
+        [Obsolete("Use WindowsSystemRestoreEngine directly. Windows System Restore points are strictly separated from Application Backups.")]
         Task<bool> CreateSystemRestorePointAsync(string description, CancellationToken ct = default);
 
         // Querying & Statistics API
         List<BackupTransaction> GetAllTransactions();
-        List<ProfileBackupGroup> GetProfileBackupGroups();
+        List<BackupTransaction> GetRecentTransactions(int limit = 150);
+        List<BackupTransaction> GetTransactionsPaginated(int offset, int limit, out int totalCount);
+        List<ProfileBackupGroup> GetProfileBackupGroups(bool includeTransactions = true);
+        void InvalidateCache();
         BackupSummaryStats GetSummaryStats();
         BackupTransaction? GetTransactionById(string transactionId);
         bool DeleteTransaction(string transactionId);
+        (int Deleted, int Skipped, int Failed, long FreedBytes) DeleteTransactions(IEnumerable<string> transactionIds);
+        (int Deleted, int Skipped, int Failed, long FreedBytes) DeleteAllApplicationBackups();
         void ClearOldBackups(int retentionDays);
 
         // Real-time notification event
         event Action<BackupTransaction>? TransactionRecorded;
 
         // Legacy compatibility
+        [Obsolete("Use WindowsSystemRestoreEngine directly. Windows System Restore points are strictly separated from Application Backups.")]
         bool CreateSystemRestorePoint(string description);
         bool BackupRegistryState(IEnumerable<string> registryPaths);
         bool BackupServiceState(IEnumerable<string> serviceNames);

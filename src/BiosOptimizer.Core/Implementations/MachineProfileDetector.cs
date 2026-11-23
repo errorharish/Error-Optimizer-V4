@@ -266,7 +266,15 @@ public class MachineProfileDetector : IMachineProfileDetector
                 profile.BaseboardModel = obj["Product"]?.ToString() ?? "Mainboard";
             }
             
-            profile.FirmwareType = "UEFI Firmware (GPT)";
+            try
+            {
+                using var sysCtrlKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control");
+                var fwVal = sysCtrlKey?.GetValue("PEFirmwareType");
+                profile.FirmwareType = fwVal != null && int.TryParse(fwVal.ToString(), out int ft)
+                    ? (ft == 2 ? "UEFI Firmware" : ft == 1 ? "Legacy BIOS" : "Unknown")
+                    : "Unknown";
+            }
+            catch { profile.FirmwareType = "Unknown"; }
         }
         catch { }
     }
@@ -336,7 +344,7 @@ public class MachineProfileDetector : IMachineProfileDetector
             }
             catch
             {
-                profile.MemorySpeedAndType = "Dual-Channel High Speed";
+                profile.MemorySpeedAndType = "Unavailable";
             }
         }
         catch { }
@@ -395,15 +403,16 @@ public class MachineProfileDetector : IMachineProfileDetector
             if (key != null)
             {
                 var val = key.GetValue("UEFISecureBootEnabled");
-                bool enabled = (val != null && Convert.ToInt32(val) == 1);
-                profile.SecureBootStatus = enabled ? "Enabled (UEFI Secure Boot Active)" : "Disabled (Firmware Support Available)";
+                profile.SecureBootStatus = val == null
+                    ? "Unknown"
+                    : (Convert.ToInt32(val) == 1 ? "Enabled (UEFI Secure Boot Active)" : "Disabled (Firmware Support Available)");
             }
             else
             {
-                profile.SecureBootStatus = "Enabled (UEFI Secure Boot)";
+                profile.SecureBootStatus = "Not Available (Legacy BIOS / Unsupported)";
             }
         }
-        catch { profile.SecureBootStatus = "Active"; }
+        catch { profile.SecureBootStatus = "Unknown"; }
 
         // 2. TPM
         try
@@ -414,19 +423,21 @@ public class MachineProfileDetector : IMachineProfileDetector
             {
                 foreach (var obj in res)
                 {
-                    string spec = obj["SpecVersion"]?.ToString() ?? "2.0";
-                    profile.TpmStatus = $"TPM {spec} (Enabled & Activated)";
+                    string spec = obj["SpecVersion"]?.ToString() ?? "Present";
+                    bool en = obj["IsEnabled_InitialValue"] is bool b1 && b1;
+                    bool act = obj["IsActivated_InitialValue"] is bool b2 && b2;
+                    profile.TpmStatus = $"TPM {spec} ({(en && act ? "Enabled & Activated" : "Present / Inactive")})";
                     break;
                 }
             }
             else
             {
-                profile.TpmStatus = "TPM 2.0 (Platform Security Ready)";
+                profile.TpmStatus = "Not Detected";
             }
         }
         catch
         {
-            profile.TpmStatus = "TPM 2.0 (Firmware Security Active)";
+            profile.TpmStatus = "Unavailable (Requires Elevated Query)";
         }
     }
 

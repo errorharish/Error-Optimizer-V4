@@ -16,12 +16,14 @@ public interface IScheduledTaskManager
     bool Enable(string taskPath);
     bool Disable(string taskPath);
     bool Restore(string taskPath, TaskState originalState);
+    string? LastError { get; }
 }
 
 public enum StartupState { Enabled, Disabled, Unknown }
 
 public class StartupEntryState
 {
+    public string Id { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string FriendlySource { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
@@ -40,11 +42,12 @@ public class StartupEntryState
     public bool RequiresAdmin { get; set; }
     public bool RequiresRestart { get; set; }
     public bool FileExists { get; set; }
+    public string? IconBase64 { get; set; }
 }
 
 public interface IStartupManager
 {
     List<StartupEntryState> GetStartupEntries();
-    bool DisableEntry(string source, string path, string valueName);
-    bool EnableEntry(string source, string path, string valueName);
+    bool DisableEntry(string source, string path, string valueName, string? id = null);
+    bool EnableEntry(string source, string path, string valueName, string? id = null);
 }

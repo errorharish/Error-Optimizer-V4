@@ -203,7 +203,7 @@ namespace BiosOptimizer.GUI.ViewModels
         public bool IsConfigured => RamMapping.TryGetValue(_selectedRamSize, out uint targetDword) && _currentDwordValue == targetDword;
         public bool CanApply => !IsBusy && !IsConfigured;
         public bool CanRestore => HasBackup && !IsBusy;
-        public string ApplyButtonText => IsBusy ? "APPLYING..." : (IsConfigured ? "100% OPTIMIZED" : "APPLY VALUE");
+        public string ApplyButtonText => IsBusy ? "APPLYING..." : (IsConfigured ? "CONFIGURED & VERIFIED" : "APPLY VALUE");
 
         // ── Details Modal ──────────────────────────────────────────────────
         private bool _isDetailsModalOpen;

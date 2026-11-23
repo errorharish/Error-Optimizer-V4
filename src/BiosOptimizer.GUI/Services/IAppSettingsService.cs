@@ -89,6 +89,11 @@ namespace BiosOptimizer.GUI.Services
         bool AiRamLimiterAutoStart { get; set; }
         bool SmartAutoOptimizeAutoStart { get; set; }
 
+        // ── Optimization Baseline State ──────────────────────────────────
+        bool HasRunOptimization { get; set; }
+        string LastOptimizationDate { get; set; }
+        int LastOptimizedActionsCount { get; set; }
+
         event Action? SettingsChanged;
         event Action<string, object?, object?>? SettingChanged;
         void Save();

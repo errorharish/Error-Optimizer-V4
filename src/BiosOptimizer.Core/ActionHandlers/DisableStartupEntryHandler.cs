@@ -31,41 +31,75 @@ public class DisableStartupEntryHandler : IActionHandler
     public OptimizationResult Apply(OptimizationEntry entry)
     {
         var result = new OptimizationResult { ItemId = entry.Id, DisplayName = entry.DisplayName };
-        
         var currentValue = GetCurrentValueDisplay(entry);
 
         if (string.Equals(currentValue, "Not Found", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(currentValue, "Disabled", StringComparison.OrdinalIgnoreCase))
         {
             result.Status = ResultStatus.AlreadyOptimized;
-            result.Message = "Startup entry is not active.";
+            result.Message = "Startup entry is already disabled or inactive.";
             return result;
         }
 
-        // Capture before state into Universal Backup Manager
+        string profile = entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual";
+
+        // Prefer reversible Task Manager StartupApproved / Task Scheduler disable via _startupManager
         try
         {
-            BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureGenericTweak(
-                entry.SourceProfile is { Length: > 0 } sp ? sp : "Manual",
-                $"startup.{entry.Target}".ToLowerInvariant(),
-                $"Startup Entry: {entry.Target}",
-                "Services",
-                "StartupEntry",
-                "Enabled",
-                "Disabled (Removed from Run key)",
-                "RegistryValueRestore",
-                false, // Removal from Run key is not directly re-addable via BackupManager
-                "SAFE"
-            );
+            var matches = _startupManager.GetStartupEntries()
+                .Where(e => e.State == StartupState.Enabled &&
+                           (e.ValueName.Contains(entry.Target, StringComparison.OrdinalIgnoreCase) ||
+                            e.DisplayName.Contains(entry.Target, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (matches.Count > 0)
+            {
+                int disabledCount = 0;
+                foreach (var match in matches)
+                {
+                    var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureTargetedGenericTweak(
+                        profile,
+                        $"startup.{match.ValueName}".ToLowerInvariant().Replace(' ', '.'),
+                        $"Startup Entry: {match.ValueName}",
+                        "Startup",
+                        "StartupApproved",
+                        match.State.ToString(),
+                        "Disabled",
+                        "StartupRestore",
+                        true,
+                        "SAFE",
+                        targetKey: $"{match.Source}|{match.Path}",
+                        valueName: match.ValueName);
+
+                    if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out string bkErr))
+                    {
+                        result.Status = ResultStatus.Failed;
+                        result.Message = bkErr;
+                        return result;
+                    }
+
+                    if (_startupManager.DisableEntry(match.Source, match.Path, match.ValueName))
+                    {
+                        disabledCount++;
+                    }
+                }
+
+                if (disabledCount > 0)
+                {
+                    result.Status = ResultStatus.Success;
+                    result.Message = $"Startup entry '{entry.Target}' disabled cleanly (reversible via StartupApproved).";
+                    return result;
+                }
+            }
         }
         catch { }
 
-        // Try to remove from registry directly (most reliable approach)
-        bool removed = TryRemoveFromRegistry(entry.Target);
+        // Fallback: backup full Run-key registry value before deleting so BackupManager can restore it
+        bool removed = TryBackupAndRemoveFromRegistry(profile, entry.Target);
         if (removed)
         {
             result.Status = ResultStatus.Success;
-            result.Message = "Startup entry removed from registry.";
+            result.Message = "Startup entry disabled and original registry value backed up.";
             return result;
         }
 
@@ -78,7 +112,16 @@ public class DisableStartupEntryHandler : IActionHandler
     {
         try
         {
-            // Check registry run keys
+            var matches = _startupManager.GetStartupEntries()
+                .Where(e => e.ValueName.Contains(entry.Target, StringComparison.OrdinalIgnoreCase) ||
+                            e.DisplayName.Contains(entry.Target, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (matches.Count > 0)
+            {
+                return matches.Any(m => m.State == StartupState.Enabled) ? "Enabled" : "Disabled";
+            }
+
+            // Fallback raw registry check
             foreach (var (hive, path) in StartupPaths)
             {
                 using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
@@ -99,7 +142,7 @@ public class DisableStartupEntryHandler : IActionHandler
         return "Not Found";
     }
 
-    private static bool TryRemoveFromRegistry(string entryName)
+    private static bool TryBackupAndRemoveFromRegistry(string profile, string entryName)
     {
         bool removed = false;
         foreach (var (hive, path) in StartupPaths)
@@ -110,10 +153,29 @@ public class DisableStartupEntryHandler : IActionHandler
                 using var key = baseKey.OpenSubKey(path, true);
                 if (key == null) continue;
 
+                string hivePrefix = hive == RegistryHive.LocalMachine ? "HKLM" : "HKCU";
                 foreach (var valueName in key.GetValueNames())
                 {
                     if (valueName.Contains(entryName, StringComparison.OrdinalIgnoreCase))
                     {
+                        object? oldVal = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                        string oldKind = key.GetValueKind(valueName).ToString();
+                        var bkTx = BiosOptimizer.Core.Implementations.BackupManager.Instance.CaptureRegistryTweak(
+                            profile,
+                            $"Startup Entry: {valueName}",
+                            hivePrefix,
+                            path,
+                            valueName,
+                            oldVal?.ToString() ?? "",
+                            oldKind,
+                            "DELETED",
+                            "SAFE"
+                        );
+                        if (!BiosOptimizer.Core.Implementations.BackupManager.EnsureVerifiedTransaction(bkTx, out _))
+                        {
+                            continue;
+                        }
+
                         key.DeleteValue(valueName, false);
                         removed = true;
                     }

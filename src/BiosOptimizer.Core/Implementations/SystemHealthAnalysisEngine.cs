@@ -21,7 +21,7 @@ namespace BiosOptimizer.Core.Implementations
 
         public async Task<SystemHealthReport> RunHealthAnalysisAsync(IProgress<SystemHealthScanProgress>? progress = null)
         {
-            return await Task.Run(async () =>
+            return await Task.Run(() =>
             {
                 var report = new SystemHealthReport();
                 var diag = _reader.ReadCompleteDiagnostics();
@@ -43,7 +43,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 1. HARDWARE ANALYSIS ══
                 Notify("HARDWARE ANALYSIS", "Checking CPU Core Topology & Virtualization");
-                await Task.Delay(100);
                 if (diag.Cpu.PhysicalCores >= 4)
                 {
                     report.Findings.Add(new SystemHealthFinding
@@ -72,7 +71,6 @@ namespace BiosOptimizer.Core.Implementations
                 }
 
                 Notify("HARDWARE ANALYSIS", "Evaluating Memory Margin & Dual Channel");
-                await Task.Delay(100);
                 if (diag.Memory.UsagePercentage < 80.0)
                 {
                     report.Findings.Add(new SystemHealthFinding
@@ -101,7 +99,6 @@ namespace BiosOptimizer.Core.Implementations
                 }
 
                 Notify("HARDWARE ANALYSIS", "Checking Multi-GPU Configuration");
-                await Task.Delay(100);
                 if (diag.Gpus.Count > 0)
                 {
                     string gpuNames = string.Join(" + ", diag.Gpus.Select(g => g.Name));
@@ -118,7 +115,6 @@ namespace BiosOptimizer.Core.Implementations
                 }
 
                 Notify("HARDWARE ANALYSIS", "Inspecting Primary NVMe / SSD Storage Health");
-                await Task.Delay(100);
                 var sysPartition = diag.Storage.Partitions.FirstOrDefault(p => p.IsSystemDrive) ?? diag.Storage.Partitions.FirstOrDefault();
                 if (sysPartition != null && sysPartition.UsagePercentage < 88.0)
                 {
@@ -149,7 +145,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 2. WINDOWS ANALYSIS ══
                 Notify("WINDOWS ANALYSIS", "Checking OS Build & Architecture");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "Windows Operating System Platform",
@@ -162,7 +157,6 @@ namespace BiosOptimizer.Core.Implementations
                 });
 
                 Notify("WINDOWS ANALYSIS", "Checking System Uptime & Fast Startup");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "System Uptime & Kernel Health",
@@ -175,7 +169,6 @@ namespace BiosOptimizer.Core.Implementations
                 });
 
                 Notify("WINDOWS ANALYSIS", "Checking Windows Power Scheme");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "Active Power Management Scheme",
@@ -189,7 +182,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 3. DRIVER ANALYSIS ══
                 Notify("DRIVER ANALYSIS", "Validating Graphics Driver Compatibility");
-                await Task.Delay(100);
                 var primaryGpu = diag.Gpus.FirstOrDefault(g => g.AdapterType.Contains("DEDICATED")) ?? diag.Gpus.FirstOrDefault();
                 if (primaryGpu != null)
                 {
@@ -206,7 +198,6 @@ namespace BiosOptimizer.Core.Implementations
                 }
 
                 Notify("DRIVER ANALYSIS", "Checking Hardware Accelerated GPU Scheduling (HAGS)");
-                await Task.Delay(100);
                 if (diag.Graphics.HagsStatus.Contains("Active", StringComparison.OrdinalIgnoreCase) || diag.Graphics.HagsStatus.Contains("Enabled", StringComparison.OrdinalIgnoreCase))
                 {
                     report.Findings.Add(new SystemHealthFinding
@@ -236,7 +227,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 4. SECURITY ANALYSIS ══
                 Notify("SECURITY ANALYSIS", "Auditing UEFI Secure Boot Status");
-                await Task.Delay(100);
                 if (diag.Security.SecureBootStatus == "GOOD")
                 {
                     report.Findings.Add(new SystemHealthFinding
@@ -264,21 +254,39 @@ namespace BiosOptimizer.Core.Implementations
                     });
                 }
 
-                Notify("SECURITY ANALYSIS", "Checking TPM 2.0 Security Module");
-                await Task.Delay(100);
-                report.Findings.Add(new SystemHealthFinding
+                Notify("SECURITY ANALYSIS", "Checking TPM Security Module");
+                if (diag.Security.TpmStatus == "GOOD")
                 {
-                    Title = "Trusted Platform Module (TPM)",
-                    Category = "Security",
-                    Severity = "PASS",
-                    CurrentState = diag.Security.TpmDetail,
-                    ExpectedState = "TPM 2.0 Active",
-                    Reason = "Provides hardware-isolated cryptographic key storage and BitLocker support.",
-                    RecommendedAction = "No action required."
-                });
+                    report.Findings.Add(new SystemHealthFinding
+                    {
+                        Title = "Trusted Platform Module (TPM)",
+                        Category = "Security",
+                        Severity = "PASS",
+                        CurrentState = diag.Security.TpmDetail,
+                        ExpectedState = "TPM Active",
+                        Reason = "Provides hardware-isolated cryptographic key storage and BitLocker support.",
+                        RecommendedAction = "No action required."
+                    });
+                }
+                else
+                {
+                    report.Findings.Add(new SystemHealthFinding
+                    {
+                        Title = "Trusted Platform Module (TPM)",
+                        Category = "Security",
+                        Severity = diag.Security.TpmStatus == "UNKNOWN" ? "INFO" : "WARNING",
+                        CurrentState = diag.Security.TpmDetail,
+                        ExpectedState = "TPM 2.0 Active",
+                        Reason = diag.Security.TpmStatus == "UNKNOWN"
+                            ? "TPM state could not be verified without elevated WMI permissions."
+                            : "TPM security module was not detected or is inactive.",
+                        RecommendedAction = diag.Security.TpmStatus == "UNKNOWN"
+                            ? "Run diagnostics elevated to query Win32_Tpm."
+                            : "Verify PTT / fTPM setting in UEFI firmware."
+                    });
+                }
 
                 Notify("SECURITY ANALYSIS", "Auditing Real-Time Antivirus Protection");
-                await Task.Delay(100);
                 if (diag.Security.RealtimeProtection == "GOOD")
                 {
                     report.Findings.Add(new SystemHealthFinding
@@ -307,7 +315,6 @@ namespace BiosOptimizer.Core.Implementations
                 }
 
                 Notify("SECURITY ANALYSIS", "Checking Windows Firewall & Network Filter");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "Windows Defender Firewall",
@@ -320,7 +327,6 @@ namespace BiosOptimizer.Core.Implementations
                 });
 
                 Notify("SECURITY ANALYSIS", "Checking User Account Control (UAC)");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "User Account Control (UAC)",
@@ -334,7 +340,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 5. PERFORMANCE ANALYSIS ══
                 Notify("PERFORMANCE ANALYSIS", "Checking Memory Integrity & Virtualization State");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "Virtualization & Hypervisor Security",
@@ -347,7 +352,6 @@ namespace BiosOptimizer.Core.Implementations
                 });
 
                 Notify("PERFORMANCE ANALYSIS", "Checking Active Network Connectivity");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "Network Interface Status",
@@ -360,7 +364,6 @@ namespace BiosOptimizer.Core.Implementations
                 });
 
                 Notify("PERFORMANCE ANALYSIS", "Checking Power & Battery Thermal State");
-                await Task.Delay(100);
                 report.Findings.Add(new SystemHealthFinding
                 {
                     Title = "System Power Source & Battery State",
@@ -374,7 +377,6 @@ namespace BiosOptimizer.Core.Implementations
 
                 // ══ 6. FINAL REPORT GENERATION ══
                 Notify("FINAL REPORT", "Compiling Health Score & Category Telemetry");
-                await Task.Delay(150);
 
                 report.TotalChecks = report.Findings.Count;
                 report.PassedChecks = report.Findings.Count(f => f.Severity == "PASS");
